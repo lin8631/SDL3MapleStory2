@@ -4,7 +4,7 @@
 
 拉取项目
 ```
-git clone --recurse-submodules https://github.com/lin8631/SDL3MapleStory2.git --depth 1 -b new
+git clone --recurse-submodules https://github.com/lin8631/SDL3MapleStory2.git --depth 1
 ```
 
 新建build目录,进入

@@ -1,0 +1,12 @@
+[submodule "Engine/SDL"]
+	path = Engine/SDL
+	url = https://github.com/libsdl-org/SDL.git
+[submodule "Engine/entt"]
+	path = Engine/entt
+	url = https://github.com/skypjack/entt.git
+[submodule "Engine/freetype"]
+	path = Engine/freetype
+	url = https://github.com/freetype/freetype.git
+[submodule "Game/wzlibcpp"]
+	path = Game/wzlibcpp
+	url = https://github.com/PShocker/wzlibcpp.git

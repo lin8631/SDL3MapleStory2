@@ -22,15 +22,22 @@ jobs:
 
       - name: Install dependencies with vcpkg
         run: |
-          & "$env:VCPKG_ROOT\vcpkg" install ffmpeg[core,avcodec,avformat] freetype --triplet x64-windows
+          & "$env:VCPKG_ROOT\vcpkg" install ffmpeg[core,avcodec,avformat] freetype --triplet x64-windows --recurse
+
+      - name: Verify vcpkg installation
+        run: |
+          echo "=== Installed packages ==="
+          & "$env:VCPKG_ROOT\vcpkg" list
+          echo "=== Installed directories ==="
+          Get-ChildItem -Path "$env:VCPKG_ROOT\installed" -Recurse -Directory | Select-Object -First 20
 
       - name: Locate FFmpeg paths
         id: locate_ffmpeg
         shell: pwsh
         run: |
-          $header = Get-ChildItem -Path $env:VCPKG_ROOT -Recurse -Filter "avformat.h" -ErrorAction SilentlyContinue | Select-Object -First 1
+          $header = Get-ChildItem -Path "$env:VCPKG_ROOT\installed" -Recurse -Filter "avformat.h" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $header) {
-            Write-Error "avformat.h not found in vcpkg installation. Please check vcpkg install log."
+            Write-Error "avformat.h not found in installed directory. Please check vcpkg install logs."
             exit 1
           }
           $includePath = $header.Directory.FullName

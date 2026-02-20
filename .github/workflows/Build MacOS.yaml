@@ -1,0 +1,37 @@
+name: Build macOS
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      # 安装 macOS 依赖（包含 FFmpeg 开发库）
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install sdl2 freetype ffmpeg
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+                -DCMAKE_BUILD_TYPE=Release \
+                -S .
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdlMS-macos
+          path: build/sdlms/sdlMS
+          if-no-files-found: error

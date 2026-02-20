@@ -1,4 +1,4 @@
-name: CMake on Ubuntu (gcc only)
+name: Build Native and WebAssembly
 
 on:
   push:
@@ -7,69 +7,79 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build:
+  # 原生Linux构建（gcc）
+  native-gcc:
     runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        build_type: [Release]
-        c_compiler: [gcc]
-        include:
-          - c_compiler: gcc
-            cpp_compiler: g++
-
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: 'recursive'
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
 
-    # 列出源文件（可选）
-    - name: List source files
-      run: ls -la
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxi-dev libxcursor-dev libxfixes-dev libxrender-dev \
+            libwayland-dev wayland-protocols libxkbcommon-dev \
+            libdbus-1-dev libibus-1.0-dev libudev-dev \
+            libasound2-dev libpulse-dev libpipewire-0.3-dev \
+            libjack-jackd2-dev libsndio-dev \
+            libgl1-mesa-dev libgles2-mesa-dev \
+            libegl1-mesa-dev libdrm-dev libgbm-dev \
+            libusb-1.0-0-dev libunwind-dev \
+            libpng-dev libbz2-dev libharfbuzz-dev \
+            libfreetype-dev \
+            libavformat-dev libavcodec-dev libavutil-dev libswscale-dev
 
-    # 安装 Ubuntu 构建依赖（包含 FFmpeg）
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
-          libxi-dev libxcursor-dev libxfixes-dev libxrender-dev \
-          libwayland-dev wayland-protocols libxkbcommon-dev \
-          libdbus-1-dev libibus-1.0-dev libudev-dev \
-          libasound2-dev libpulse-dev libpipewire-0.3-dev \
-          libjack-jackd2-dev libsndio-dev \
-          libgl1-mesa-dev libgles2-mesa-dev \
-          libegl1-mesa-dev libdrm-dev libgbm-dev \
-          libusb-1.0-0-dev libunwind-dev \
-          libpng-dev libbz2-dev libharfbuzz-dev \
-          libfreetype-dev \
-          libavformat-dev libavcodec-dev libavutil-dev libswscale-dev
+      - name: Configure CMake (native)
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -S .
 
-    - name: Set reusable strings
-      id: strings
-      run: |
-        echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
+      - name: Build native
+        run: cmake --build build
 
-    - name: Configure CMake
-      run: |
-        cmake -B ${{ steps.strings.outputs.build-output-dir }} \
-              -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
-              -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
-              -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-              -S ${{ github.workspace }}
+      - name: Upload native executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdlMS-native
+          path: build/sdlms/sdlMS
+          if-no-files-found: error
 
-    - name: Build
-      run: cmake --build ${{ steps.strings.outputs.build-output-dir }}
+  # WebAssembly构建（Emscripten）
+  emscripten:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
 
-    - name: Test
-      working-directory: ${{ steps.strings.outputs.build-output-dir }}
-      run: ctest || echo "No tests found"
+      - name: Install Emscripten
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git
+          cd emsdk
+          ./emsdk install latest
+          ./emsdk activate latest
+          echo "EMSDK=$PWD" >> $GITHUB_ENV
+          echo "$PWD/upstream/emscripten" >> $GITHUB_PATH
 
-    # 上传构建产物（二进制文件）
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: sdlMS-gcc-${{ github.sha }}
-        path: ${{ steps.strings.outputs.build-output-dir }}/sdlms/sdlMS
-        if-no-files-found: error
+      - name: Configure CMake (Emscripten)
+        run: |
+          cmake -B build-web \
+                -DCMAKE_TOOLCHAIN_FILE=${{ env.EMSDK }}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DSDL_X11=OFF -DSDL_WAYLAND=OFF \
+                -S .
+
+      - name: Build WebAssembly
+        run: cmake --build build-web
+
+      - name: Upload WebAssembly artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdlMS-web
+          path: |
+            build-web/sdlms/sdlMS.js
+            build-web/sdlms/sdlMS.wasm
+            build-web/sdlms/sdlMS.data
+            build-web/sdlms/sdlMS.html
+          if-no-files-found: warn   # 某些文件可能未生成，仅警告

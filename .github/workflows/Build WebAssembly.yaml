@@ -29,12 +29,15 @@ jobs:
           find Game Engine -name "CMakeLists.txt" -exec sed -i '/-march/d' {} \;
           find Game Engine -name "*.cmake" -exec sed -i '/-march/d' {} \;
 
-      # 为 zlib 添加缺失的头文件（解决 lseek 未声明）
-      - name: Add missing includes in zlib for Emscripten
+      # 为所有 zlib 源文件添加必要的头文件（解决 read/close 未声明）
+      - name: Add missing headers in zlib for Emscripten
         run: |
-          if ! grep -q '#include <unistd.h>' Game/wzlibcpp/zlib/gzlib.c; then
-            sed -i '1i#include <unistd.h>' Game/wzlibcpp/zlib/gzlib.c
-          fi
+          cd Game/wzlibcpp/zlib
+          for file in *.c; do
+            if ! grep -q '#include <unistd.h>' "$file"; then
+              sed -i '1i#include <unistd.h>' "$file"
+            fi
+          done
 
       - name: Configure CMake (Emscripten)
         run: |

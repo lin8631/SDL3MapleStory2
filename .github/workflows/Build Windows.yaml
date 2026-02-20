@@ -28,8 +28,10 @@ jobs:
         run: |
           echo "=== Installed packages ==="
           & "$env:VCPKG_ROOT\vcpkg" list
-          echo "=== Installed directories ==="
+          echo "=== Installed directories (first 20) ==="
           Get-ChildItem -Path "$env:VCPKG_ROOT\installed" -Recurse -Directory | Select-Object -First 20
+          echo "=== Searching for avformat.h ==="
+          Get-ChildItem -Path "$env:VCPKG_ROOT\installed" -Recurse -Filter "avformat.h" -ErrorAction SilentlyContinue
 
       - name: Locate FFmpeg paths
         id: locate_ffmpeg
@@ -41,7 +43,7 @@ jobs:
             exit 1
           }
           $includePath = $header.Directory.FullName
-          $libPath = Join-Path (Split-Path $includePath -Parent) "lib"
+          $libPath = $includePath -replace '\\include$', '\lib'
           if (-not (Test-Path $libPath)) {
             Write-Error "Lib path not found at $libPath"
             exit 1

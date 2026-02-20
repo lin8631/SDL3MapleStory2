@@ -34,17 +34,21 @@ jobs:
             Write-Error "avformat.h not found in installed directory. Please check vcpkg install logs."
             exit 1
           }
-          # 包含目录是 avformat.h 所在目录的父目录（例如 ...\include）
-          $includePath = $header.Directory.Parent.FullName
-          $libPath = Join-Path $includePath "lib"
+          # 获取头文件完整路径
+          $headerPath = $header.FullName
+          Write-Host "Found avformat.h at: $headerPath"
+          # 提取包含目录：例如 ...\installed\x64-windows\include
+          $includePath = $headerPath -replace '\\include\\.*', '\include'
+          Write-Host "Include path: $includePath"
+          # 库目录应为同级的 lib
+          $libPath = $includePath -replace '\\include$', '\lib'
+          Write-Host "Lib path: $libPath"
           if (-not (Test-Path $libPath)) {
             Write-Error "Lib path not found at $libPath"
             exit 1
           }
           echo "FFMPEG_INCLUDE=$includePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "FFMPEG_LIB=$libPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "Found include at: $includePath"
-          echo "Found lib at: $libPath"
 
       - name: Configure CMake
         env:

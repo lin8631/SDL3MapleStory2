@@ -14,7 +14,6 @@ jobs:
         with:
           submodules: 'recursive'
 
-      # 安装 vcpkg 并安装依赖（包含 FFmpeg 和 FreeType）
       - name: Setup vcpkg
         run: |
           git clone https://github.com/Microsoft/vcpkg.git
@@ -25,19 +24,41 @@ jobs:
         run: |
           vcpkg install ffmpeg freetype --triplet x64-windows
 
+      - name: Set FFmpeg paths
+        run: |
+          $ffmpeg_include = "$env:VCPKG_ROOT\installed\x64-windows\include"
+          $ffmpeg_lib = "$env:VCPKG_ROOT\installed\x64-windows\lib"
+          echo "FFMPEG_INCLUDE=$ffmpeg_include" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "FFMPEG_LIB=$ffmpeg_lib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Configure CMake
         run: |
           cmake -B build `
                 -DCMAKE_BUILD_TYPE=Release `
                 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
+                -DVCPKG_TARGET_TRIPLET=x64-windows `
+                -DCMAKE_CXX_FLAGS="/I $env:FFMPEG_INCLUDE" `
+                -DCMAKE_EXE_LINKER_FLAGS="/LIBPATH:$env:FFMPEG_LIB avformat.lib avcodec.lib avutil.lib" `
                 -S .
 
       - name: Build
         run: cmake --build build --config Release
 
+      # 递归查找可执行文件
+      - name: Find executable
+        id: find_exe
+        run: |
+          $exe = Get-ChildItem -Recurse ${{ github.workspace }} -Filter "sdlMS.exe" | Select-Object -First 1
+          if (-not $exe) {
+            Write-Error "No executable found"
+            exit 1
+          }
+          echo "EXE_PATH=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "Found executable at: $($exe.FullName)"
+
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
           name: sdlMS-windows
-          path: build/sdlms/Release/sdlMS.exe
+          path: ${{ env.EXE_PATH }}
           if-no-files-found: error

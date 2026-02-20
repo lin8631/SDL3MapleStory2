@@ -14,7 +14,7 @@ jobs:
         with:
           submodules: 'recursive'
 
-      # 安装最新版 Emscripten（使用特定版本以确保稳定，此处为 3.1.70）
+      # 安装指定版本的 Emscripten（3.1.70，对 C++20 支持较好）
       - name: Install Emscripten
         run: |
           git clone https://github.com/emscripten-core/emsdk.git
@@ -24,7 +24,7 @@ jobs:
           echo "EMSDK=$PWD" >> $GITHUB_ENV
           echo "$PWD/upstream/emscripten" >> $GITHUB_PATH
 
-      # 为 zlib 源文件添加必要的 unistd.h（解决隐式声明问题）
+      # 为 zlib 源文件添加 unistd.h（解决隐式声明问题，子模块 zlib 虽不编译，但可能仍被检查）
       - name: Add missing headers in zlib for Emscripten
         run: |
           cd Game/wzlibcpp/zlib
@@ -41,17 +41,17 @@ jobs:
             sed -i '1i#include <ranges>' Game/wzlibcpp/src/File.cpp
           fi
 
-      # 配置 CMake：使用 zlib 端口、启用 C++20 和实验性库
+      # 配置 CMake：使用 Emscripten 内置 zlib 库，启用 C++20 实验性特性
       - name: Configure CMake (Emscripten)
         run: |
           cmake -B build-web \
                 -DCMAKE_TOOLCHAIN_FILE=${{ env.EMSDK }}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake \
                 -DCMAKE_BUILD_TYPE=Release \
-                -DCMAKE_CXX_FLAGS="-std=c++20 -stdlib=libc++ -fexperimental-library -sUSE_ZLIB=1" \
+                -DCMAKE_CXX_FLAGS="-std=c++20 -stdlib=libc++ -fexperimental-library" \
                 -DCMAKE_CXX_STANDARD=20 \
                 -DCMAKE_CXX_STANDARD_REQUIRED=ON \
-                -DZLIB_LIBRARY=" -sUSE_ZLIB=1" \
                 -DZLIB_INCLUDE_DIR="${{ env.EMSDK }}/upstream/emscripten/cache/sysroot/include" \
+                -DZLIB_LIBRARY="${{ env.EMSDK }}/upstream/emscripten/cache/sysroot/lib/wasm32-emscripten/libz.a" \
                 -DSDL_X11=OFF -DSDL_WAYLAND=OFF \
                 -S .
 

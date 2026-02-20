@@ -1,42 +1,79 @@
-- name: Setup vcpkg
-  run: |
-    git clone https://github.com/Microsoft/vcpkg.git
-    .\vcpkg\bootstrap-vcpkg.bat
-    echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+name: Build Windows
 
-- name: Install dependencies with vcpkg
-  run: |
-    vcpkg install ffmpeg[core,avcodec,avformat,avutil] freetype --triplet x64-windows
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
-- name: Debug vcpkg installation
-  run: |
-    echo "=== Installed packages ==="
-    vcpkg list
-    echo "=== Searching for FFmpeg ==="
-    Get-ChildItem -Path $env:VCPKG_ROOT -Recurse -Include "avformat.h", "avcodec.h", "avutil.h" -ErrorAction SilentlyContinue
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
 
-- name: Locate FFmpeg paths
-  id: locate_ffmpeg
-  run: |
-    $header = Get-ChildItem -Path $env:VCPKG_ROOT -Recurse -Filter "avformat.h" | Select-Object -First 1
-    if (-not $header) {
-      Write-Error "FFmpeg headers not found"
-      exit 1
-    }
-    $includePath = $header.Directory.FullName
-    $libPath = Join-Path (Split-Path $includePath -Parent) "lib"
-    echo "FFMPEG_INCLUDE=$includePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-    echo "FFMPEG_LIB=$libPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-    echo "Found include at: $includePath"
-    echo "Found lib at: $libPath"
+      - name: Setup vcpkg
+        run: |
+          git clone https://github.com/Microsoft/vcpkg.git
+          .\vcpkg\bootstrap-vcpkg.bat
+          echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-- name: Configure CMake
-  env:
-    INCLUDE: ${{ env.FFMPEG_INCLUDE }};${{ env.INCLUDE }}
-    LIB: ${{ env.FFMPEG_LIB }};${{ env.LIB }}
-  run: |
-    cmake -B build `
-          -DCMAKE_BUILD_TYPE=Release `
-          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
-          -DVCPKG_TARGET_TRIPLET=x64-windows `
-          -S .
+      - name: Install dependencies with vcpkg
+        run: |
+          vcpkg install ffmpeg[core,avcodec,avformat,avutil] freetype --triplet x64-windows
+
+      - name: Locate FFmpeg paths
+        id: locate_ffmpeg
+        shell: pwsh
+        run: |
+          # 递归查找 avformat.h
+          $header = Get-ChildItem -Path $env:VCPKG_ROOT -Recurse -Filter "avformat.h" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $header) {
+            Write-Error "avformat.h not found in vcpkg installation. Please check vcpkg install log."
+            exit 1
+          }
+          $includePath = $header.Directory.FullName
+          $libPath = Join-Path (Split-Path $includePath -Parent) "lib"
+          if (-not (Test-Path $libPath)) {
+            Write-Error "Lib path not found at $libPath"
+            exit 1
+          }
+          echo "FFMPEG_INCLUDE=$includePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "FFMPEG_LIB=$libPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "Found include at: $includePath"
+          echo "Found lib at: $libPath"
+
+      - name: Configure CMake
+        run: |
+          cmake -B build `
+                -DCMAKE_BUILD_TYPE=Release `
+                -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
+                -DVCPKG_TARGET_TRIPLET=x64-windows `
+                -S .
+
+      - name: Build
+        env:
+          INCLUDE: ${{ env.FFMPEG_INCLUDE }};${{ env.INCLUDE }}
+          LIB: ${{ env.FFMPEG_LIB }};${{ env.LIB }}
+        run: cmake --build build --config Release
+
+      - name: Find executable
+        id: find_exe
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Recurse ${{ github.workspace }} -Filter "sdlMS.exe" | Select-Object -First 1
+          if (-not $exe) {
+            Write-Error "No executable found"
+            exit 1
+          }
+          echo "EXE_PATH=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "Found executable at: $($exe.FullName)"
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdlMS-windows
+          path: ${{ env.EXE_PATH }}
+          if-no-files-found: error

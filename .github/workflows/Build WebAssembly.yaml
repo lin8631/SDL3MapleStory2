@@ -1,4 +1,4 @@
-name: Build WebAssembly (Emscripten)
+name: Build macOS and Windows
 
 on:
   push:
@@ -7,84 +7,66 @@ on:
     branches: [ "main" ]
 
 jobs:
-  emscripten:
-    runs-on: ubuntu-latest
+  macos:
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
 
-      # 使用 SDL3 官方工作流中相同的 Emscripten 安装方式（版本 3.1.35）
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: 3.1.35
-
-      - name: Verify Emscripten
-        run: emcc --version
-
-      # 为 zlib 源文件添加 unistd.h（解决隐式声明问题）
-      - name: Add missing headers in zlib for Emscripten
+      # 安装 macOS 依赖（使用 Homebrew）
+      - name: Install dependencies
         run: |
-          cd Game/wzlibcpp/zlib
-          for file in *.c; do
-            if ! grep -q '#include <unistd.h>' "$file"; then
-              sed -i '1i#include <unistd.h>' "$file"
-            fi
-          done
+          brew update
+          brew install sdl2 freetype ffmpeg
 
-      # 为 wzlib 的 File.cpp 添加 ranges 头文件（支持 C++20 std::views）
-      - name: Add missing #include <ranges> in File.cpp
+      - name: Configure CMake
         run: |
-          if ! grep -q '#include <ranges>' Game/wzlibcpp/src/File.cpp; then
-            sed -i '1i#include <ranges>' Game/wzlibcpp/src/File.cpp
-          fi
-          echo "=== First 10 lines of File.cpp after patch ==="
-          head -10 Game/wzlibcpp/src/File.cpp
-
-      # 配置 CMake：使用 Emscripten 内置 zlib，启用 C++20 实验性特性
-      - name: Configure CMake (Emscripten)
-        run: |
-          cmake -B build-web \
-                -DCMAKE_TOOLCHAIN_FILE=$EMSDK/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake \
+          cmake -B build \
                 -DCMAKE_BUILD_TYPE=Release \
-                -DCMAKE_CXX_FLAGS_RELEASE="-std=c++20 -stdlib=libc++ -fexperimental-library -D_LIBCPP_ENABLE_EXPERIMENTAL -gsource-map" \
-                -DCMAKE_CXX_STANDARD=20 \
-                -DCMAKE_CXX_STANDARD_REQUIRED=ON \
-                -DCMAKE_CXX_EXTENSIONS=OFF \
-                -DZLIB_INCLUDE_DIR="$EMSDK/upstream/emscripten/cache/sysroot/include" \
-                -DZLIB_LIBRARY="$EMSDK/upstream/emscripten/cache/sysroot/lib/wasm32-emscripten/libz.a" \
-                -DSDL_X11=OFF -DSDL_WAYLAND=OFF \
                 -S .
 
-      # 验证生成的 flags 文件内容
-      - name: Verify generated flags
-        run: |
-          echo "=== CMAKE_CXX_FLAGS from CMakeCache.txt ==="
-          grep -E "CMAKE_CXX_FLAGS" build-web/CMakeCache.txt || true
-          echo "=== flags.make for wzlib (Release) ==="
-          find build-web -name "flags.make" -exec cat {} \; || true
-          echo "=== includes_CXX.rsp for wzlib ==="
-          cat build-web/Game/wzlibcpp/CMakeFiles/wzlib.dir/includes_CXX.rsp || true
+      - name: Build
+        run: cmake --build build --config Release
 
-      # 清理可能残留的 -march 标志（来自生成文件）
-      - name: Clean -march from generated flags
-        run: |
-          find build-web -name "flags.make" -exec sed -i '/-march/d' {} \;
-          find build-web -name "*.ninja" -exec sed -i '/-march/d' {} \; 2>/dev/null || true
-
-      # 构建
-      - name: Build WebAssembly
-        run: cmake --build build-web
-
-      # 上传产物
-      - name: Upload WebAssembly artifacts
+      - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
-          name: sdlMS-web
-          path: |
-            build-web/sdlms/sdlMS.js
-            build-web/sdlms/sdlMS.wasm
-            build-web/sdlms/sdlMS.data
-            build-web/sdlms/sdlMS.html
-          if-no-files-found: warn
+          name: sdlMS-macos
+          path: build/sdlms/sdlMS
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      # 安装 vcpkg 并安装依赖
+      - name: Setup vcpkg
+        run: |
+          git clone https://github.com/Microsoft/vcpkg.git
+          .\vcpkg\bootstrap-vcpkg.bat
+          echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install dependencies with vcpkg
+        run: |
+          vcpkg install sdl2 freetype ffmpeg --triplet x64-windows
+
+      - name: Configure CMake
+        run: |
+          cmake -B build `
+                -DCMAKE_BUILD_TYPE=Release `
+                -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
+                -S .
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdlMS-windows
+          path: build/sdlms/Release/sdlMS.exe
+          if-no-files-found: error

@@ -24,12 +24,19 @@ jobs:
         run: |
           vcpkg install ffmpeg freetype --triplet x64-windows
 
-      - name: Set FFmpeg paths
+      - name: Verify FFmpeg libraries
+        run: |
+          Get-ChildItem -Path "$env:VCPKG_ROOT\installed\x64-windows\lib" -Filter "avformat.lib"
+          Get-ChildItem -Path "$env:VCPKG_ROOT\installed\x64-windows\lib" -Filter "avcodec.lib"
+          Get-ChildItem -Path "$env:VCPKG_ROOT\installed\x64-windows\lib" -Filter "avutil.lib"
+
+      - name: Set environment for FFmpeg
         run: |
           $ffmpeg_include = "$env:VCPKG_ROOT\installed\x64-windows\include"
           $ffmpeg_lib = "$env:VCPKG_ROOT\installed\x64-windows\lib"
           echo "FFMPEG_INCLUDE=$ffmpeg_include" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "FFMPEG_LIB=$ffmpeg_lib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "LIB=$ffmpeg_lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Configure CMake
         run: |
@@ -38,13 +45,11 @@ jobs:
                 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
                 -DVCPKG_TARGET_TRIPLET=x64-windows `
                 -DCMAKE_CXX_FLAGS="/I $env:FFMPEG_INCLUDE" `
-                -DCMAKE_EXE_LINKER_FLAGS="/LIBPATH:$env:FFMPEG_LIB avformat.lib avcodec.lib avutil.lib" `
                 -S .
 
       - name: Build
         run: cmake --build build --config Release
 
-      # 递归查找可执行文件
       - name: Find executable
         id: find_exe
         run: |

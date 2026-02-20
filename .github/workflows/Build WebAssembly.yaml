@@ -14,13 +14,13 @@ jobs:
         with:
           submodules: 'recursive'
 
-      # 安装最新版 Emscripten（3.1.75，对 C++20 ranges 支持更完善）
+      # 安装 Emscripten 3.1.41（稳定版本，C++20 支持良好）
       - name: Install Emscripten
         run: |
           git clone https://github.com/emscripten-core/emsdk.git
           cd emsdk
-          ./emsdk install 3.1.75
-          ./emsdk activate 3.1.75
+          ./emsdk install 3.1.41
+          ./emsdk activate 3.1.41
           echo "EMSDK=$PWD" >> $GITHUB_ENV
           echo "$PWD/upstream/emscripten" >> $GITHUB_PATH
 
@@ -62,9 +62,9 @@ jobs:
           find build-web -name "flags.make" -exec sed -i '/-march/d' {} \;
           find build-web -name "*.ninja" -exec sed -i '/-march/d' {} \; 2>/dev/null || true
 
-      # 构建（开启详细输出以验证编译命令）
+      # 构建
       - name: Build WebAssembly
-        run: cmake --build build-web --verbose
+        run: cmake --build build-web
 
       # 上传产物
       - name: Upload WebAssembly artifacts

@@ -14,15 +14,14 @@ jobs:
         with:
           submodules: 'recursive'
 
-      # 安装 Emscripten 3.1.41（稳定版本，C++20 支持良好）
-      - name: Install Emscripten
-        run: |
-          git clone https://github.com/emscripten-core/emsdk.git
-          cd emsdk
-          ./emsdk install 3.1.41
-          ./emsdk activate 3.1.41
-          echo "EMSDK=$PWD" >> $GITHUB_ENV
-          echo "$PWD/upstream/emscripten" >> $GITHUB_PATH
+      # 使用 SDL3 官方工作流中相同的 Emscripten 安装方式（版本 3.1.35）
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.35
+
+      - name: Verify Emscripten
+        run: emcc --version
 
       # 为 zlib 源文件添加 unistd.h（解决隐式声明问题）
       - name: Add missing headers in zlib for Emscripten
@@ -40,21 +39,32 @@ jobs:
           if ! grep -q '#include <ranges>' Game/wzlibcpp/src/File.cpp; then
             sed -i '1i#include <ranges>' Game/wzlibcpp/src/File.cpp
           fi
+          echo "=== First 10 lines of File.cpp after patch ==="
+          head -10 Game/wzlibcpp/src/File.cpp
 
       # 配置 CMake：使用 Emscripten 内置 zlib，启用 C++20 实验性特性
       - name: Configure CMake (Emscripten)
+        env:
+          CXXFLAGS: "-std=c++20 -stdlib=libc++ -fexperimental-library -D_LIBCPP_ENABLE_EXPERIMENTAL -gsource-map"
         run: |
           cmake -B build-web \
-                -DCMAKE_TOOLCHAIN_FILE=${{ env.EMSDK }}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake \
+                -DCMAKE_TOOLCHAIN_FILE=$EMSDK/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake \
                 -DCMAKE_BUILD_TYPE=Release \
-                -DCMAKE_CXX_FLAGS="-std=c++20 -stdlib=libc++ -fexperimental-library -D_LIBCPP_ENABLE_EXPERIMENTAL" \
                 -DCMAKE_CXX_STANDARD=20 \
                 -DCMAKE_CXX_STANDARD_REQUIRED=ON \
                 -DCMAKE_CXX_EXTENSIONS=OFF \
-                -DZLIB_INCLUDE_DIR="${{ env.EMSDK }}/upstream/emscripten/cache/sysroot/include" \
-                -DZLIB_LIBRARY="${{ env.EMSDK }}/upstream/emscripten/cache/sysroot/lib/wasm32-emscripten/libz.a" \
+                -DZLIB_INCLUDE_DIR="$EMSDK/upstream/emscripten/cache/sysroot/include" \
+                -DZLIB_LIBRARY="$EMSDK/upstream/emscripten/cache/sysroot/lib/wasm32-emscripten/libz.a" \
                 -DSDL_X11=OFF -DSDL_WAYLAND=OFF \
                 -S .
+
+      # 检查 CMake 缓存中的 C++ 标志
+      - name: Verify CMake flags
+        run: |
+          echo "=== CMAKE_CXX_FLAGS from cache ==="
+          grep CMAKE_CXX_FLAGS build-web/CMakeCache.txt || true
+          echo "=== flags.make for wzlib ==="
+          find build-web -name "flags.make" -exec grep -H "CXX_FLAGS" {} \; || true
 
       # 清理可能残留的 -march 标志（来自生成文件）
       - name: Clean -march from generated flags
@@ -62,9 +72,9 @@ jobs:
           find build-web -name "flags.make" -exec sed -i '/-march/d' {} \;
           find build-web -name "*.ninja" -exec sed -i '/-march/d' {} \; 2>/dev/null || true
 
-      # 构建
+      # 构建（如果失败，输出详细日志）
       - name: Build WebAssembly
-        run: cmake --build build-web
+        run: cmake --build build-web --verbose
 
       # 上传产物
       - name: Upload WebAssembly artifacts

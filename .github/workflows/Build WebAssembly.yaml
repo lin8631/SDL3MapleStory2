@@ -1,4 +1,4 @@
-name: Build WebAssembly
+name: Build WebAssembly (Emscripten)
 
 on:
   push:
@@ -14,22 +14,17 @@ jobs:
         with:
           submodules: 'recursive'
 
+      # 安装最新版 Emscripten（使用特定版本以确保稳定，此处为 3.1.70）
       - name: Install Emscripten
         run: |
           git clone https://github.com/emscripten-core/emsdk.git
           cd emsdk
-          ./emsdk install latest
-          ./emsdk activate latest
+          ./emsdk install 3.1.70
+          ./emsdk activate 3.1.70
           echo "EMSDK=$PWD" >> $GITHUB_ENV
           echo "$PWD/upstream/emscripten" >> $GITHUB_PATH
 
-      # 修补子模块中的 CMakeLists.txt，移除所有 -march 相关的行
-      - name: Patch submodules to remove -march
-        run: |
-          find Game Engine -name "CMakeLists.txt" -exec sed -i '/-march/d' {} \;
-          find Game Engine -name "*.cmake" -exec sed -i '/-march/d' {} \;
-
-      # 为 zlib 所有源文件添加 unistd.h（解决 read/close/lseek 未声明）
+      # 为 zlib 源文件添加必要的 unistd.h（解决隐式声明问题）
       - name: Add missing headers in zlib for Emscripten
         run: |
           cd Game/wzlibcpp/zlib
@@ -46,28 +41,31 @@ jobs:
             sed -i '1i#include <ranges>' Game/wzlibcpp/src/File.cpp
           fi
 
+      # 配置 CMake：使用 zlib 端口、启用 C++20 和实验性库
       - name: Configure CMake (Emscripten)
         run: |
           cmake -B build-web \
                 -DCMAKE_TOOLCHAIN_FILE=${{ env.EMSDK }}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake \
                 -DCMAKE_BUILD_TYPE=Release \
-                -DCMAKE_C_FLAGS="" \
-                -DCMAKE_CXX_FLAGS="-std=c++20" \
+                -DCMAKE_CXX_FLAGS="-std=c++20 -stdlib=libc++ -fexperimental-library -sUSE_ZLIB=1" \
                 -DCMAKE_CXX_STANDARD=20 \
                 -DCMAKE_CXX_STANDARD_REQUIRED=ON \
-                -DCMAKE_SYSTEM_PROCESSOR=wasm32 \
+                -DZLIB_LIBRARY=" -sUSE_ZLIB=1" \
+                -DZLIB_INCLUDE_DIR="${{ env.EMSDK }}/upstream/emscripten/cache/sysroot/include" \
                 -DSDL_X11=OFF -DSDL_WAYLAND=OFF \
                 -S .
 
-      # 构建前，清理 CMake 生成的 flags 文件中可能残留的 -march
+      # 清理可能残留的 -march 标志（来自生成文件）
       - name: Clean -march from generated flags
         run: |
           find build-web -name "flags.make" -exec sed -i '/-march/d' {} \;
           find build-web -name "*.ninja" -exec sed -i '/-march/d' {} \; 2>/dev/null || true
 
+      # 构建
       - name: Build WebAssembly
         run: cmake --build build-web
 
+      # 上传产物
       - name: Upload WebAssembly artifacts
         uses: actions/upload-artifact@v4
         with:

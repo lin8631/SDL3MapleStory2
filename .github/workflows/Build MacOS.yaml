@@ -1,4 +1,4 @@
-name: Build macOS
+  name: Build macOS
 
 on:
   push:
@@ -14,16 +14,20 @@ jobs:
         with:
           submodules: 'recursive'
 
-      # 安装 macOS 依赖（包含 FFmpeg 开发库）
       - name: Install dependencies
         run: |
           brew update
           brew install sdl2 freetype ffmpeg
 
+      - name: Set up pkg-config path
+        run: |
+          echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig:$(brew --prefix ffmpeg)/lib/pkgconfig" >> $GITHUB_ENV
+
       - name: Configure CMake
         run: |
           cmake -B build \
                 -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_PREFIX_PATH=$(brew --prefix) \
                 -S .
 
       - name: Build
@@ -34,4 +38,4 @@ jobs:
         with:
           name: sdlMS-macos
           path: build/sdlms/sdlMS
-          if-no-files-found: error
+          if-no-files-found: error  

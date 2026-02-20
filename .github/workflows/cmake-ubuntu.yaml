@@ -62,11 +62,10 @@ jobs:
           echo "EMSDK=$PWD" >> $GITHUB_ENV
           echo "$PWD/upstream/emscripten" >> $GITHUB_PATH
 
-      # 清除可能导致 -march 标志的环境变量
-      - name: Clear compiler flags
+      # 修补 zlib 的 CMakeLists.txt，移除所有 -march 选项（Emscripten 不支持）
+      - name: Patch zlib CMakeLists.txt for Emscripten
         run: |
-          echo "CFLAGS=" >> $GITHUB_ENV
-          echo "CXXFLAGS=" >> $GITHUB_ENV
+          sed -i '/-march/d' Game/wzlibcpp/zlib/CMakeLists.txt
 
       - name: Configure CMake (Emscripten)
         run: |

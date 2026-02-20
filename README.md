@@ -13,6 +13,15 @@ cmake .. -G Ninja
 ninja
 ```
 
+```
+ ![Indexed by DeepWiki](https://deepwiki.com/badge/lin8631/SDL3MapleStory2) 
+```
+
+
+ ![Indexed by DeepWiki](https://deepwiki.com/badge/lin8631/SDL3MapleStory2) 
+
+
+
 重构内容:
 
 1.使用SDL3

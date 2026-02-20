@@ -1,4 +1,4 @@
-  name: Build macOS
+name: Build macOS
 
 on:
   push:
@@ -38,4 +38,4 @@ jobs:
         with:
           name: sdlMS-macos
           path: build/sdlms/sdlMS
-          if-no-files-found: error  
+          if-no-files-found: error

@@ -1,0 +1,95 @@
+name: CMake on multiple platforms (with Emscripten)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        build_type: [Release]
+        c_compiler: [gcc, clang, cl]
+        # 新增：是否使用 Emscripten 工具链，默认 false
+        emscripten: [false]
+        include:
+          - os: windows-latest
+            c_compiler: cl
+            cpp_compiler: cl
+          - os: ubuntu-latest
+            c_compiler: gcc
+            cpp_compiler: g++
+          - os: ubuntu-latest
+            c_compiler: clang
+            cpp_compiler: clang++
+          # 新增 Emscripten 构建配置（运行在 Ubuntu 上）
+          - os: ubuntu-latest
+            c_compiler: emcc          # 占位符，实际由工具链覆盖
+            cpp_compiler: em++
+            emscripten: true
+        exclude:
+          - os: windows-latest
+            c_compiler: gcc
+          - os: windows-latest
+            c_compiler: clang
+          - os: ubuntu-latest
+            c_compiler: cl
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # 新增：安装 Emscripten SDK（仅在需要时执行）
+    - name: Install Emscripten
+      if: ${{ matrix.emscripten }}
+      shell: bash
+      run: |
+        git clone https://github.com/emscripten-core/emsdk.git
+        cd emsdk
+        ./emsdk install latest
+        ./emsdk activate latest
+        echo "EMSDK=$PWD" >> $GITHUB_ENV
+        echo "$PWD/upstream/emscripten" >> $GITHUB_PATH
+
+    - name: Set reusable strings
+      id: strings
+      shell: bash
+      run: |
+        echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
+
+    - name: Configure CMake
+      # 根据是否使用 Emscripten 设置不同的 CMake 参数
+      run: >
+        cmake -B ${{ steps.strings.outputs.build-output-dir }}
+        ${{ matrix.emscripten && format('-DCMAKE_TOOLCHAIN_FILE={0}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake', env.EMSDK) || '' }}
+        ${{ !matrix.emscripten && format('-DCMAKE_CXX_COMPILER={0}', matrix.cpp_compiler) || '' }}
+        ${{ !matrix.emscripten && format('-DCMAKE_C_COMPILER={0}', matrix.c_compiler) || '' }}
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -S ${{ github.workspace }}
+
+    - name: Build
+      run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+
+    # 修改测试步骤：对 Emscripten 构建使用 Node.js 运行测试（假设项目生成了 .js 文件）
+    - name: Test (Native)
+      if: ${{ !matrix.emscripten }}
+      working-directory: ${{ steps.strings.outputs.build-output-dir }}
+      run: ctest --build-config ${{ matrix.build_type }}
+
+    - name: Test (Emscripten)
+      if: ${{ matrix.emscripten }}
+      working-directory: ${{ steps.strings.outputs.build-output-dir }}
+      run: |
+        # 示例：查找并运行生成的 .js 测试文件（需根据项目实际情况调整）
+        # 这里假设 CMake 添加了测试并生成了可执行文件 test_runner.js
+        # 如果没有测试，可以跳过或运行 node 执行特定文件
+        if [ -f "test_runner.js" ]; then
+          node test_runner.js
+        else
+          echo "No Emscripten tests found, skipping."
+        fi

@@ -24,24 +24,25 @@ jobs:
         run: |
           vcpkg install ffmpeg freetype --triplet x64-windows
 
-      - name: Find FFmpeg paths
-        id: ffmpeg_paths
+      - name: Locate FFmpeg include and lib paths
+        id: locate_ffmpeg
         run: |
-          # 查找 include 目录（通常位于 installed/x64-windows/include）
-          $includePath = Join-Path $env:VCPKG_ROOT "installed\x64-windows\include"
-          $libPath = Join-Path $env:VCPKG_ROOT "installed\x64-windows\lib"
-          if (-not (Test-Path $includePath)) {
-            Write-Error "Include path not found: $includePath"
+          $vcpkgRoot = $env:VCPKG_ROOT
+          $includeFile = Get-ChildItem -Path $vcpkgRoot -Recurse -Filter "avformat.h" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $includeFile) {
+            Write-Error "avformat.h not found in vcpkg installation"
             exit 1
           }
+          $includePath = $includeFile.Directory.FullName
+          $libPath = Join-Path (Split-Path $includePath -Parent) "lib"
           if (-not (Test-Path $libPath)) {
-            Write-Error "Lib path not found: $libPath"
+            Write-Error "Lib path not found at $libPath"
             exit 1
           }
           echo "FFMPEG_INCLUDE=$includePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "FFMPEG_LIB=$libPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "Found include: $includePath"
-          echo "Found lib: $libPath"
+          echo "Found include at: $includePath"
+          echo "Found lib at: $libPath"
 
       - name: Configure CMake
         run: |

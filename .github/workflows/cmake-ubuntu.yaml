@@ -30,7 +30,7 @@ jobs:
     - name: List source files
       run: ls -la
 
-    # 安装 Ubuntu 构建依赖
+    # 安装 Ubuntu 构建依赖（包含 FFmpeg）
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -45,7 +45,8 @@ jobs:
           libegl1-mesa-dev libdrm-dev libgbm-dev \
           libusb-1.0-0-dev libunwind-dev \
           libpng-dev libbz2-dev libharfbuzz-dev \
-          libfreetype-dev  # freetype 开发库（可选）
+          libfreetype-dev \
+          libavformat-dev libavcodec-dev libavutil-dev libswscale-dev
 
     - name: Set reusable strings
       id: strings

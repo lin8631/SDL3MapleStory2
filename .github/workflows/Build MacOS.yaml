@@ -36,9 +36,21 @@ jobs:
       - name: Build
         run: cmake --build build
 
+      # 递归查找可执行文件
+      - name: Find executable
+        id: find_exe
+        run: |
+          EXE=$(find ${{ github.workspace }} -type f -name "sdlMS" -o -name "sdlMS.exe" | head -n 1)
+          if [ -z "$EXE" ]; then
+            echo "No executable found" >&2
+            exit 1
+          fi
+          echo "EXE_PATH=$EXE" >> $GITHUB_ENV
+          echo "Found executable at: $EXE"
+
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
           name: sdlMS-macos
-          path: build/sdlms/sdlMS
+          path: ${{ env.EXE_PATH }}
           if-no-files-found: error

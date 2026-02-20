@@ -22,13 +22,12 @@ jobs:
 
       - name: Install dependencies with vcpkg
         run: |
-          vcpkg install ffmpeg[core,avcodec,avformat,avutil] freetype --triplet x64-windows
+          & "$env:VCPKG_ROOT\vcpkg" install ffmpeg[core,avcodec,avformat] freetype --triplet x64-windows
 
       - name: Locate FFmpeg paths
         id: locate_ffmpeg
         shell: pwsh
         run: |
-          # 递归查找 avformat.h
           $header = Get-ChildItem -Path $env:VCPKG_ROOT -Recurse -Filter "avformat.h" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $header) {
             Write-Error "avformat.h not found in vcpkg installation. Please check vcpkg install log."

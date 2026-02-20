@@ -48,7 +48,7 @@ jobs:
           cmake -B build-web \
                 -DCMAKE_TOOLCHAIN_FILE=$EMSDK/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake \
                 -DCMAKE_BUILD_TYPE=Release \
-                -DCMAKE_CXX_FLAGS="-std=c++20 -stdlib=libc++ -fexperimental-library -D_LIBCPP_ENABLE_EXPERIMENTAL -gsource-map" \
+                -DCMAKE_CXX_FLAGS_RELEASE="-std=c++20 -stdlib=libc++ -fexperimental-library -D_LIBCPP_ENABLE_EXPERIMENTAL -gsource-map" \
                 -DCMAKE_CXX_STANDARD=20 \
                 -DCMAKE_CXX_STANDARD_REQUIRED=ON \
                 -DCMAKE_CXX_EXTENSIONS=OFF \
@@ -57,12 +57,12 @@ jobs:
                 -DSDL_X11=OFF -DSDL_WAYLAND=OFF \
                 -S .
 
-      # 验证 CMake 标志是否正确设置
-      - name: Verify CMake flags
+      # 验证生成的 flags 文件内容
+      - name: Verify generated flags
         run: |
-          echo "=== CMAKE_CXX_FLAGS from cache ==="
+          echo "=== CMAKE_CXX_FLAGS from CMakeCache.txt ==="
           grep -E "CMAKE_CXX_FLAGS" build-web/CMakeCache.txt || true
-          echo "=== flags.make for wzlib ==="
+          echo "=== flags.make for wzlib (Release) ==="
           find build-web -name "flags.make" -exec cat {} \; || true
           echo "=== includes_CXX.rsp for wzlib ==="
           cat build-web/Game/wzlibcpp/CMakeFiles/wzlib.dir/includes_CXX.rsp || true
@@ -73,9 +73,9 @@ jobs:
           find build-web -name "flags.make" -exec sed -i '/-march/d' {} \;
           find build-web -name "*.ninja" -exec sed -i '/-march/d' {} \; 2>/dev/null || true
 
-      # 构建（如果失败，输出详细日志）
+      # 构建
       - name: Build WebAssembly
-        run: cmake --build build-web --verbose
+        run: cmake --build build-web
 
       # 上传产物
       - name: Upload WebAssembly artifacts

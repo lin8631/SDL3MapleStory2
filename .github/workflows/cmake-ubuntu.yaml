@@ -1,4 +1,4 @@
-name: Build Native and WebAssembly
+name: Build Ubuntu Native and WebAssembly
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  # 原生Linux构建（gcc）
+  # 原生 Linux 构建（gcc）
   native-gcc:
     runs-on: ubuntu-latest
     steps:
@@ -45,7 +45,7 @@ jobs:
           path: build/sdlms/sdlMS
           if-no-files-found: error
 
-  # WebAssembly构建（Emscripten）
+  # WebAssembly 构建（Emscripten）
   emscripten:
     runs-on: ubuntu-latest
     steps:
@@ -62,11 +62,20 @@ jobs:
           echo "EMSDK=$PWD" >> $GITHUB_ENV
           echo "$PWD/upstream/emscripten" >> $GITHUB_PATH
 
+      # 清除可能导致 -march 标志的环境变量
+      - name: Clear compiler flags
+        run: |
+          echo "CFLAGS=" >> $GITHUB_ENV
+          echo "CXXFLAGS=" >> $GITHUB_ENV
+
       - name: Configure CMake (Emscripten)
         run: |
           cmake -B build-web \
                 -DCMAKE_TOOLCHAIN_FILE=${{ env.EMSDK }}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake \
                 -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_C_FLAGS="" \
+                -DCMAKE_CXX_FLAGS="" \
+                -DCMAKE_SYSTEM_PROCESSOR=wasm32 \
                 -DSDL_X11=OFF -DSDL_WAYLAND=OFF \
                 -S .
 
@@ -82,4 +91,4 @@ jobs:
             build-web/sdlms/sdlMS.wasm
             build-web/sdlms/sdlMS.data
             build-web/sdlms/sdlMS.html
-          if-no-files-found: warn   # 某些文件可能未生成，仅警告
+          if-no-files-found: warn

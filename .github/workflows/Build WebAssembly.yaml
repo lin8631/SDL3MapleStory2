@@ -29,7 +29,7 @@ jobs:
           find Game Engine -name "CMakeLists.txt" -exec sed -i '/-march/d' {} \;
           find Game Engine -name "*.cmake" -exec sed -i '/-march/d' {} \;
 
-      # 为所有 zlib 源文件添加必要的头文件（解决 read/close 未声明）
+      # 为 zlib 所有源文件添加 unistd.h（解决 read/close/lseek 未声明）
       - name: Add missing headers in zlib for Emscripten
         run: |
           cd Game/wzlibcpp/zlib
@@ -39,6 +39,13 @@ jobs:
             fi
           done
 
+      # 为 wzlib 的 File.cpp 添加 ranges 头文件（支持 C++20 std::views）
+      - name: Add missing #include <ranges> in File.cpp
+        run: |
+          if ! grep -q '#include <ranges>' Game/wzlibcpp/src/File.cpp; then
+            sed -i '1i#include <ranges>' Game/wzlibcpp/src/File.cpp
+          fi
+
       - name: Configure CMake (Emscripten)
         run: |
           cmake -B build-web \
@@ -47,6 +54,8 @@ jobs:
                 -DCMAKE_C_FLAGS="" \
                 -DCMAKE_CXX_FLAGS="" \
                 -DCMAKE_SYSTEM_PROCESSOR=wasm32 \
+                -DCMAKE_CXX_STANDARD=20 \
+                -DCMAKE_CXX_STANDARD_REQUIRED=ON \
                 -DSDL_X11=OFF -DSDL_WAYLAND=OFF \
                 -S .
 

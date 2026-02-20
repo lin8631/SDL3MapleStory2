@@ -1,0 +1,68 @@
+name: CMake on Ubuntu (gcc/clang)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Release]
+        c_compiler: [gcc, clang]
+        include:
+          - c_compiler: gcc
+            cpp_compiler: g++
+          - c_compiler: clang
+            cpp_compiler: clang++
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+
+    # 列出源文件（可选）
+    - name: List source files
+      run: ls -la
+
+    # 安装 Ubuntu 构建依赖
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+          libxi-dev libxcursor-dev libxfixes-dev libxrender-dev \
+          libwayland-dev wayland-protocols libxkbcommon-dev \
+          libdbus-1-dev libibus-1.0-dev libudev-dev \
+          libasound2-dev libpulse-dev libpipewire-0.3-dev \
+          libjack-jackd2-dev libsndio-dev \
+          libgl1-mesa-dev libgles2-mesa-dev \
+          libegl1-mesa-dev libdrm-dev libgbm-dev \
+          libusb-1.0-0-dev libunwind-dev \
+          libpng-dev libbz2-dev libharfbuzz-dev \
+          libfreetype-dev  # freetype 开发库（可选）
+
+    - name: Set reusable strings
+      id: strings
+      run: |
+        echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
+
+    - name: Configure CMake
+      run: |
+        cmake -B ${{ steps.strings.outputs.build-output-dir }} \
+              -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
+              -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
+              -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+              -S ${{ github.workspace }}
+
+    - name: Build
+      run: cmake --build ${{ steps.strings.outputs.build-output-dir }}
+
+    - name: Test
+      working-directory: ${{ steps.strings.outputs.build-output-dir }}
+      run: ctest

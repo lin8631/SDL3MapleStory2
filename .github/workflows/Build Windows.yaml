@@ -24,26 +24,19 @@ jobs:
         run: |
           & "$env:VCPKG_ROOT\vcpkg" install ffmpeg[core,avcodec,avformat] freetype --triplet x64-windows --recurse
 
-      - name: Verify vcpkg installation
-        run: |
-          echo "=== Installed packages ==="
-          & "$env:VCPKG_ROOT\vcpkg" list
-          echo "=== Installed directories (first 20) ==="
-          Get-ChildItem -Path "$env:VCPKG_ROOT\installed" -Recurse -Directory | Select-Object -First 20
-          echo "=== Searching for avformat.h ==="
-          Get-ChildItem -Path "$env:VCPKG_ROOT\installed" -Recurse -Filter "avformat.h" -ErrorAction SilentlyContinue
-
       - name: Locate FFmpeg paths
         id: locate_ffmpeg
         shell: pwsh
         run: |
+          # 递归查找 avformat.h
           $header = Get-ChildItem -Path "$env:VCPKG_ROOT\installed" -Recurse -Filter "avformat.h" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $header) {
             Write-Error "avformat.h not found in installed directory. Please check vcpkg install logs."
             exit 1
           }
-          $includePath = $header.Directory.FullName
-          $libPath = $includePath -replace '\\include$', '\lib'
+          # 包含目录是 avformat.h 所在目录的父目录（例如 ...\include）
+          $includePath = $header.Directory.Parent.FullName
+          $libPath = Join-Path $includePath "lib"
           if (-not (Test-Path $libPath)) {
             Write-Error "Lib path not found at $libPath"
             exit 1
@@ -54,11 +47,15 @@ jobs:
           echo "Found lib at: $libPath"
 
       - name: Configure CMake
+        env:
+          INCLUDE: ${{ env.FFMPEG_INCLUDE }};${{ env.INCLUDE }}
+          LIB: ${{ env.FFMPEG_LIB }};${{ env.LIB }}
         run: |
           cmake -B build `
                 -DCMAKE_BUILD_TYPE=Release `
                 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
                 -DVCPKG_TARGET_TRIPLET=x64-windows `
+                -DCMAKE_CXX_FLAGS="/I $env:FFMPEG_INCLUDE" `
                 -S .
 
       - name: Build

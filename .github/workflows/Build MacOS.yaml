@@ -17,17 +17,20 @@ jobs:
       - name: Install dependencies
         run: |
           brew update
-          brew install sdl2 freetype ffmpeg
+          brew install sdl2 freetype ffmpeg pkg-config
 
-      - name: Set up pkg-config path
+      - name: Get FFmpeg flags via pkg-config
+        id: ffmpeg_flags
         run: |
-          echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig:$(brew --prefix ffmpeg)/lib/pkgconfig" >> $GITHUB_ENV
+          echo "CFLAGS=$(pkg-config --cflags libavformat libavcodec libavutil)" >> $GITHUB_ENV
+          echo "LDFLAGS=$(pkg-config --libs libavformat libavcodec libavutil)" >> $GITHUB_ENV
 
       - name: Configure CMake
         run: |
           cmake -B build \
                 -DCMAKE_BUILD_TYPE=Release \
-                -DCMAKE_PREFIX_PATH=$(brew --prefix) \
+                -DCMAKE_CXX_FLAGS="${{ env.CFLAGS }}" \
+                -DCMAKE_EXE_LINKER_FLAGS="${{ env.LDFLAGS }}" \
                 -S .
 
       - name: Build

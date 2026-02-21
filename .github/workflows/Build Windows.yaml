@@ -1,4 +1,4 @@
-name: Build Windows (Native)
+name: Build Windows with LLVM 18 (Clang)
 
 on:
   push:
@@ -7,23 +7,34 @@ on:
     branches: [ "main" ]
 
 jobs:
-  windows:
+  windows-clang:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
 
+      # 安装 LLVM 18（通过 Chocolatey）
+      - name: Install LLVM 18
+        run: |
+          choco install llvm --version=18.1.0 -y
+          echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Verify LLVM version
+        run: clang-cl --version
+
+      # 安装 vcpkg 并安装依赖
       - name: Setup vcpkg
         run: |
           git clone https://github.com/Microsoft/vcpkg.git
           .\vcpkg\bootstrap-vcpkg.bat
           echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Install dependencies with vcpkg (full ffmpeg)
+      - name: Install dependencies with vcpkg
         run: |
-          & "$env:VCPKG_ROOT\vcpkg" install ffmpeg[core,avcodec,avformat,avutil,swscale] freetype --triplet x64-windows --recurse
+          & "$env:VCPKG_ROOT\vcpkg" install ffmpeg[core,avcodec,avformat,swscale] freetype --triplet x64-windows --recurse
 
+      # 定位 FFmpeg 路径（用于环境变量）
       - name: Locate FFmpeg paths
         id: locate_ffmpeg
         shell: pwsh
@@ -38,31 +49,44 @@ jobs:
           echo "FFMPEG_INCLUDE=$includePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "FFMPEG_LIB=$libPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+      # 配置 CMake 使用 clang-cl
       - name: Configure CMake
+        env:
+          CC: clang-cl
+          CXX: clang-cl
         run: |
           cmake -B build `
                 -DCMAKE_BUILD_TYPE=Release `
+                -DCMAKE_C_COMPILER=clang-cl `
+                -DCMAKE_CXX_COMPILER=clang-cl `
                 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
                 -DVCPKG_TARGET_TRIPLET=x64-windows `
                 -DCMAKE_CXX_FLAGS="/I $env:FFMPEG_INCLUDE" `
                 -S .
 
+      # 构建
       - name: Build
         env:
           INCLUDE: ${{ env.FFMPEG_INCLUDE }};${{ env.INCLUDE }}
           LIB: ${{ env.FFMPEG_LIB }};${{ env.LIB }}
         run: cmake --build build --config Release
 
+      # 查找可执行文件并上传
       - name: Find executable
         id: find_exe
         shell: pwsh
         run: |
           $exe = Get-ChildItem -Recurse ${{ github.workspace }} -Filter "sdlMS.exe" | Select-Object -First 1
+          if (-not $exe) {
+            Write-Error "No executable found"
+            exit 1
+          }
           echo "EXE_PATH=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "Found executable at: $($exe.FullName)"
 
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
-          name: sdlMS-windows
+          name: sdlMS-windows-clang
           path: ${{ env.EXE_PATH }}
           if-no-files-found: error

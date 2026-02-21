@@ -1,4 +1,4 @@
-name: Build Windows
+name: Build Windows (Native)
 
 on:
   push:
@@ -20,40 +20,25 @@ jobs:
           .\vcpkg\bootstrap-vcpkg.bat
           echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Install dependencies with vcpkg
+      - name: Install dependencies with vcpkg (full ffmpeg)
         run: |
-          & "$env:VCPKG_ROOT\vcpkg" install ffmpeg[core,avcodec,avformat] freetype --triplet x64-windows --recurse
+          & "$env:VCPKG_ROOT\vcpkg" install ffmpeg[core,avcodec,avformat,avutil,swscale] freetype --triplet x64-windows --recurse
 
       - name: Locate FFmpeg paths
         id: locate_ffmpeg
         shell: pwsh
         run: |
-          # 递归查找 avformat.h
           $header = Get-ChildItem -Path "$env:VCPKG_ROOT\installed" -Recurse -Filter "avformat.h" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $header) {
-            Write-Error "avformat.h not found in installed directory. Please check vcpkg install logs."
+            Write-Error "avformat.h not found"
             exit 1
           }
-          # 获取头文件完整路径
-          $headerPath = $header.FullName
-          Write-Host "Found avformat.h at: $headerPath"
-          # 提取包含目录：例如 ...\installed\x64-windows\include
-          $includePath = $headerPath -replace '\\include\\.*', '\include'
-          Write-Host "Include path: $includePath"
-          # 库目录应为同级的 lib
+          $includePath = $header.Directory.FullName -replace '\\include\\.*', '\include'
           $libPath = $includePath -replace '\\include$', '\lib'
-          Write-Host "Lib path: $libPath"
-          if (-not (Test-Path $libPath)) {
-            Write-Error "Lib path not found at $libPath"
-            exit 1
-          }
           echo "FFMPEG_INCLUDE=$includePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "FFMPEG_LIB=$libPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Configure CMake
-        env:
-          INCLUDE: ${{ env.FFMPEG_INCLUDE }};${{ env.INCLUDE }}
-          LIB: ${{ env.FFMPEG_LIB }};${{ env.LIB }}
         run: |
           cmake -B build `
                 -DCMAKE_BUILD_TYPE=Release `
@@ -73,12 +58,7 @@ jobs:
         shell: pwsh
         run: |
           $exe = Get-ChildItem -Recurse ${{ github.workspace }} -Filter "sdlMS.exe" | Select-Object -First 1
-          if (-not $exe) {
-            Write-Error "No executable found"
-            exit 1
-          }
           echo "EXE_PATH=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "Found executable at: $($exe.FullName)"
 
       - name: Upload executable
         uses: actions/upload-artifact@v4

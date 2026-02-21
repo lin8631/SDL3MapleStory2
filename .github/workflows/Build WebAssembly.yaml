@@ -7,55 +7,49 @@ on:
     branches: [ "main" ]
 
 jobs:
-  emscripten:
-    runs-on: ubuntu-latest
+  emscripten-windows:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
 
+      # 安装 Emscripten SDK
       - name: Install Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.70  # 可根据需要调整版本
+
+      # 确保 make 命令可用（Emscripten 在 Windows 上需要）
+      - name: Install make
         run: |
-          git clone https://github.com/emscripten-core/emsdk.git
-          cd emsdk
-          ./emsdk install latest
-          ./emsdk activate latest
-          echo "EMSDK=$PWD" >> $GITHUB_ENV
-          echo "$PWD/upstream/emscripten" >> $GITHUB_PATH
+          choco install make -y
+          echo "C:\ProgramData\chocolatey\lib\make\tools\install\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      # 修补子模块中的 CMakeLists.txt，移除所有 -march 相关的行
-      - name: Patch submodules to remove -march
+      - name: Verify make
+        run: make --version
+
+      # 使用 emcmake 配置 CMake
+      - name: Configure with emcmake
         run: |
-          find Game Engine -name "CMakeLists.txt" -exec sed -i '/-march/d' {} \;
-          find Game Engine -name "*.cmake" -exec sed -i '/-march/d' {} \;
+          mkdir build
+          cd build
+          emcmake cmake ..
 
-      - name: Configure CMake (Emscripten)
+      # 使用 emmake 构建
+      - name: Build with emmake
         run: |
-          cmake -B build-web \
-                -DCMAKE_TOOLCHAIN_FILE=${{ env.EMSDK }}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake \
-                -DCMAKE_BUILD_TYPE=Release \
-                -DCMAKE_C_FLAGS="" \
-                -DCMAKE_CXX_FLAGS="" \
-                -DCMAKE_SYSTEM_PROCESSOR=wasm32 \
-                -DSDL_X11=OFF -DSDL_WAYLAND=OFF \
-                -S .
+          cd build
+          emmake make -j8
 
-      # 构建前，清理 CMake 生成的 flags 文件中可能残留的 -march
-      - name: Clean -march from generated flags
-        run: |
-          find build-web -name "flags.make" -exec sed -i '/-march/d' {} \;
-          find build-web -name "*.ninja" -exec sed -i '/-march/d' {} \; 2>/dev/null || true
-
-      - name: Build WebAssembly
-        run: cmake --build build-web
-
-      - name: Upload WebAssembly artifacts
+      # 上传构建产物（根据您的项目实际情况调整路径）
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: sdlMS-web
+          name: sdlMS-web-windows
           path: |
-            build-web/sdlms/sdlMS.js
-            build-web/sdlms/sdlMS.wasm
-            build-web/sdlms/sdlMS.data
-            build-web/sdlms/sdlMS.html
+            build/sdlMS.html
+            build/sdlMS.js
+            build/sdlMS.wasm
+            build/sdlMS.data
           if-no-files-found: warn

@@ -14,10 +14,10 @@ jobs:
         with:
           submodules: 'recursive'
 
-      # 安装 LLVM 18（通过 Chocolatey）
+      # 强制安装 LLVM 18.1.0（覆盖预装的 LLVM 20）
       - name: Install LLVM 18
         run: |
-          choco install llvm --version=18.1.0 -y
+          choco install llvm --version=18.1.0 -y --force
           echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Verify LLVM version
@@ -34,7 +34,7 @@ jobs:
         run: |
           & "$env:VCPKG_ROOT\vcpkg" install ffmpeg[core,avcodec,avformat,swscale] freetype --triplet x64-windows --recurse
 
-      # 定位 FFmpeg 路径（用于环境变量）
+      # 定位 FFmpeg 路径
       - name: Locate FFmpeg paths
         id: locate_ffmpeg
         shell: pwsh

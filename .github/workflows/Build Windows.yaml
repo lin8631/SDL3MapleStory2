@@ -23,7 +23,7 @@ jobs:
       - name: Verify LLVM version
         run: clang-cl --version
 
-      # 安装 vcpkg 并安装依赖
+      # 安装 vcpkg 并安装依赖（增加 swresample）
       - name: Setup vcpkg
         run: |
           git clone https://github.com/Microsoft/vcpkg.git
@@ -32,9 +32,9 @@ jobs:
 
       - name: Install dependencies with vcpkg
         run: |
-          & "$env:VCPKG_ROOT\vcpkg" install ffmpeg[core,avcodec,avformat,swscale] freetype --triplet x64-windows --recurse
+          & "$env:VCPKG_ROOT\vcpkg" install ffmpeg[core,avcodec,avformat,swscale,swresample] freetype --triplet x64-windows --recurse
 
-      # 定位 FFmpeg 路径
+      # 定位 FFmpeg 路径（用于环境变量）
       - name: Locate FFmpeg paths
         id: locate_ffmpeg
         shell: pwsh

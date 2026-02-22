@@ -1,4 +1,4 @@
-name: Build
+name: Build with Clang 18 + Ninja
 
 on: [push, pull_request]
 
@@ -8,9 +8,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install LLVM 18
+      - name: Install LLVM 18 (allow downgrade)
         run: |
-          choco install llvm --version=18.1.0
+          choco install llvm --version=18.1.0 --allow-downgrade
           echo "C:\Program Files\LLVM\bin" >> $env:GITHUB_PATH
 
       - name: Install CMake and Ninja

@@ -12,6 +12,11 @@ jobs:
           submodules: true  # 关键：拉取所有子模块
           fetch-depth: 0    # 可选，拉取完整历史，如果需要
 
+      - name: Initialize wzlibcpp submodules
+        run: |
+          cd Game/wzlibcpp
+          git submodule update --init --recursive
+
       - name: Install LLVM 18 (allow downgrade)
         run: |
           choco install llvm --version=18.1.0 --allow-downgrade

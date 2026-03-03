@@ -22,19 +22,20 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build cmake
+          sudo apt-get install -y cmake make
 
       - name: Configure with emcmake
         run: |
+          rm -rf build
           mkdir -p build
           cd build
-          emcmake cmake .. -G Ninja \
+          emcmake cmake .. \
             -DCMAKE_BUILD_TYPE=Release
 
       - name: Build with emmake
         run: |
           cd build
-          emmake ninja
+          emmake make -j$(nproc)
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

@@ -33,6 +33,7 @@ jobs:
 
       - name: Install vcpkg and FFmpeg
         run: |
+          set -e
           git clone https://github.com/Microsoft/vcpkg.git
           ./vcpkg/bootstrap-vcpkg.sh
           ./vcpkg/vcpkg install ffmpeg:x64-linux-release

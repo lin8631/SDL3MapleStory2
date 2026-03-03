@@ -28,7 +28,8 @@ jobs:
             libegl1-mesa-dev libdrm-dev libgbm-dev \
             libusb-1.0-0-dev libunwind-dev \
             libpng-dev libbz2-dev libharfbuzz-dev \
-            libfreetype-dev
+            libfreetype-dev \
+            nasm
 
       - name: Install vcpkg and FFmpeg
         run: |

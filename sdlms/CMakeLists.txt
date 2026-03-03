@@ -24,6 +24,16 @@ if(EMSCRIPTEN)
     endif()
 endif()
 
+# Try to find static FFmpeg on Linux
+find_package(PkgConfig)
+if(PkgConfig_FOUND AND NOT EMSCRIPTEN)
+    pkg_check_modules(FFMPEG_STATIC libavformat libavcodec libavutil libswscale libswresample IMPORTED_TARGET)
+    if(FFMPEG_STATIC_FOUND)
+        include_directories(${FFMPEG_STATIC_INCLUDE_DIRS})
+        set(FFMPEG_STATIC_LDFLAGS ${FFMPEG_STATIC_LINK_FLAGS} ${FFMPEG_STATIC_LIBRARIES})
+    endif()
+endif()
+
 file(GLOB SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/**/*.cpp)
 add_executable(sdlMS ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp ${SOURCE_FILES})
 
@@ -33,7 +43,11 @@ target_link_libraries(sdlMS PRIVATE freetype)
 target_link_libraries(sdlMS PRIVATE EnTT)
 
 if(NOT EMSCRIPTEN)
-    target_link_libraries(sdlMS PRIVATE avformat avcodec avutil swscale swresample)
+    if(FFMPEG_STATIC_FOUND)
+        target_link_libraries(sdlMS PRIVATE ${FFMPEG_STATIC_LDFLAGS})
+    else()
+        target_link_libraries(sdlMS PRIVATE avformat avcodec avutil swscale swresample)
+    endif()
 endif()
 
 if(WIN32)
@@ -52,7 +66,7 @@ if(APPLE)
         )
 endif()
 
-# 设置 Emscripten 编译选项3
+# 设置 Emscripten 编译选项
 if(EMSCRIPTEN)
         set(CMAKE_EXECUTABLE_SUFFIX ".html")
 

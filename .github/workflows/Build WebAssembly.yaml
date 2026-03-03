@@ -7,49 +7,42 @@ on:
     branches: [ "main" ]
 
 jobs:
-  emscripten-windows:
-    runs-on: windows-latest
+  emscripten-ubuntu:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
 
-      # 安装 Emscripten SDK
       - name: Install Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:
-          version: 3.1.70  # 可根据需要调整版本
+          version: 3.1.70
 
-      # 确保 make 命令可用（Emscripten 在 Windows 上需要）
-      - name: Install make
+      - name: Install dependencies
         run: |
-          choco install make -y
-          echo "C:\ProgramData\chocolatey\lib\make\tools\install\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake
 
-      - name: Verify make
-        run: make --version
-
-      # 使用 emcmake 配置 CMake
       - name: Configure with emcmake
         run: |
-          mkdir build
+          mkdir -p build
           cd build
-          emcmake cmake ..
+          emcmake cmake .. -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release
 
-      # 使用 emmake 构建
       - name: Build with emmake
         run: |
           cd build
-          emmake make -j8
+          emmake ninja
 
-      # 上传构建产物（根据您的项目实际情况调整路径）
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: sdlMS-web-windows
+          name: sdlMS-web
           path: |
-            build/sdlMS.html
-            build/sdlMS.js
-            build/sdlMS.wasm
-            build/sdlMS.data
+            build/sdlms/sdlMS.html
+            build/sdlms/sdlMS.js
+            build/sdlms/sdlMS.wasm
+            build/sdlms/sdlMS.data
           if-no-files-found: warn

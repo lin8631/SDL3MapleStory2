@@ -6,11 +6,23 @@ include_directories("${CMAKE_SOURCE_DIR}/Game/wzlibcpp/include")
 include_directories("${CMAKE_SOURCE_DIR}/Game/wzlibcpp/mio/include")
 
 # ffmpeg
-include_directories("C:/ffmpeg-master-latest-win64-gpl-shared/include")
-link_directories("C:/ffmpeg-master-latest-win64-gpl-shared/lib")
+if(WIN32)
+    include_directories("C:/ffmpeg-master-latest-win64-gpl-shared/include")
+    link_directories("C:/ffmpeg-master-latest-win64-gpl-shared/lib")
 
-include_directories("C:/FFMPEG-WEB/include")
-link_directories("C:/FFMPEG-WEB/lib")
+    include_directories("C:/FFMPEG-WEB/include")
+    link_directories("C:/FFMPEG-WEB/lib")
+endif()
+
+if(EMSCRIPTEN)
+    if(DEFINED ENV{FFMPEG_ROOT})
+        set(FFMPEG_ROOT $ENV{FFMPEG_ROOT})
+    endif()
+    if(FFMPEG_ROOT AND EXISTS "${FFMPEG_ROOT}/include")
+        include_directories("${FFMPEG_ROOT}/include")
+        link_directories("${FFMPEG_ROOT}/lib")
+    endif()
+endif()
 
 file(GLOB SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/**/*.cpp)
 add_executable(sdlMS ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp ${SOURCE_FILES})
@@ -20,7 +32,9 @@ target_link_libraries(sdlMS PRIVATE wzlib)
 target_link_libraries(sdlMS PRIVATE freetype)
 target_link_libraries(sdlMS PRIVATE EnTT)
 
-target_link_libraries(sdlMS PRIVATE avformat avcodec avutil swscale swresample)
+if(NOT EMSCRIPTEN)
+    target_link_libraries(sdlMS PRIVATE avformat avcodec avutil swscale swresample)
+endif()
 
 if(WIN32)
         if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")

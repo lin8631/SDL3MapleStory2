@@ -32,7 +32,8 @@ jobs:
           cd build
           emcmake cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
-            -DZLIB_BUILD_EXAMPLES=OFF
+            -DZLIB_BUILD_EXAMPLES=OFF \
+            -DBUILD_SHARED_LIBS=OFF
 
       - name: Build with emmake
         run: |

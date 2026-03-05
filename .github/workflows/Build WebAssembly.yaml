@@ -27,8 +27,8 @@ jobs:
       - name: Configure with emcmake
         run: |
           rm -rf build
-          mkdir -p build/Font
-          cp -r Engine/Font build/Font/@Font
+          mkdir -p build/Font/@Font
+          cp Engine/Font/simsun.ttc build/Font/@Font/
           cd build
           emcmake cmake .. \
             -DCMAKE_BUILD_TYPE=Release \

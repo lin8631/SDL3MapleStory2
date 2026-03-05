@@ -28,6 +28,7 @@ file(GLOB SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/**/*.cpp)
 
 if(EMSCRIPTEN)
     list(REMOVE_ITEM SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/Components/Sound.cpp")
+    list(APPEND SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/Components/SoundStub.cpp")
 endif()
 
 add_executable(sdlMS ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp ${SOURCE_FILES})

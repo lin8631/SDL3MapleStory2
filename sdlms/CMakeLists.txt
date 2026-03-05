@@ -28,7 +28,6 @@ file(GLOB SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/**/*.cpp)
 
 if(EMSCRIPTEN)
     list(REMOVE_ITEM SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/Components/Sound.cpp")
-    list(APPEND SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/Components/SoundStub.cpp")
 endif()
 
 add_executable(sdlMS ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp ${SOURCE_FILES})
@@ -58,7 +57,7 @@ if(APPLE)
         )
 endif()
 
-# 设置 Emscripten 编译选项2
+# 设置 Emscripten 编译选项
 if(EMSCRIPTEN)
         set(CMAKE_EXECUTABLE_SUFFIX ".html")
 

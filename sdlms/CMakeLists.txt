@@ -58,7 +58,7 @@ if(APPLE)
         )
 endif()
 
-# 设置 Emscripten 编译选项
+# 设置 Emscripten 编译选项2
 if(EMSCRIPTEN)
         set(CMAKE_EXECUTABLE_SUFFIX ".html")
 

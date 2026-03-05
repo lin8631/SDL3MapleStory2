@@ -60,7 +60,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     Sound::init();
     Drop::init();
 
-    // World::load_map(222020111);
+    // World::load_map(222020111);777
 
     World::load_map(1000000);
     Player::ent = World::registry->create();

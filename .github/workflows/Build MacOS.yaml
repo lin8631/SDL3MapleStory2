@@ -25,6 +25,9 @@ jobs:
           echo "CFLAGS=$(pkg-config --cflags libavformat libavcodec libavutil)" >> $GITHUB_ENV
           echo "LDFLAGS=$(pkg-config --libs libavformat libavcodec libavutil)" >> $GITHUB_ENV
 
+      - name: Clean build
+        run: rm -rf build
+
       - name: Configure CMake
         run: |
           cmake -B build \

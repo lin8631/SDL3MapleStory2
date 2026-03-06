@@ -58,6 +58,8 @@ jobs:
           EXEDIR=$(dirname "$EXE")
           LIBDIR="$EXEDIR/lib"
           mkdir -p "$LIBDIR"
+          # 保存库目录的绝对路径供上传使用
+          echo "LIB_PATH=$LIBDIR" >> $GITHUB_ENV
 
           # 找出依赖的 FFmpeg 库（以 libav 或 libsw 开头）
           deps=$(otool -L "$EXE" | grep -E 'libav|libsw' | awk '{print $1}')
@@ -94,12 +96,12 @@ jobs:
 
           echo "FFmpeg libraries copied and RPATH set."
 
-      # 上传可执行文件和库
+      # 上传可执行文件和库（使用绝对路径）
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: sdlMS-macos
           path: |
             ${{ env.EXE_PATH }}
-            ${{ env.EXE_PATH }}/../lib/*.dylib
+            ${{ env.LIB_PATH }}/*.dylib
           if-no-files-found: error

@@ -1,3 +1,12 @@
+cmake_minimum_required(VERSION 3.28)
+project(sdlMS)
+
+# 自动检测并使用 vcpkg 工具链（如果存在且未指定）
+if(DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
+    message(STATUS "Auto-detected vcpkg toolchain: ${CMAKE_TOOLCHAIN_FILE}")
+endif()
+
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}")
 include_directories("${CMAKE_SOURCE_DIR}/Engine/entt/src")
 include_directories("${CMAKE_SOURCE_DIR}/Engine/SDL/include")
@@ -18,13 +27,35 @@ if(NOT EMSCRIPTEN)
 
         if(PC_AVFORMAT_FOUND AND PC_AVCODEC_FOUND AND PC_AVUTIL_FOUND AND PC_SWSCALE_FOUND AND PC_SWRESAMPLE_FOUND)
             message(STATUS "Found FFmpeg via pkg-config")
-            set(FFMPEG_LIBRARIES
-                PkgConfig::AVFORMAT
-                PkgConfig::AVCODEC
-                PkgConfig::AVUTIL
-                PkgConfig::SWSCALE
-                PkgConfig::SWRESAMPLE
+
+            # 使用传统变量（避免 CMake 导入目标在部分环境失效的问题）
+            set(FFMPEG_INCLUDE_DIRS
+                ${PC_AVFORMAT_INCLUDE_DIRS}
+                ${PC_AVCODEC_INCLUDE_DIRS}
+                ${PC_AVUTIL_INCLUDE_DIRS}
+                ${PC_SWSCALE_INCLUDE_DIRS}
+                ${PC_SWRESAMPLE_INCLUDE_DIRS}
             )
+            list(REMOVE_DUPLICATES FFMPEG_INCLUDE_DIRS)
+            include_directories(${FFMPEG_INCLUDE_DIRS})
+
+            set(FFMPEG_LIBRARIES
+                ${PC_AVFORMAT_LIBRARIES}
+                ${PC_AVCODEC_LIBRARIES}
+                ${PC_AVUTIL_LIBRARIES}
+                ${PC_SWSCALE_LIBRARIES}
+                ${PC_SWRESAMPLE_LIBRARIES}
+            )
+
+            set(FFMPEG_LIBRARY_DIRS
+                ${PC_AVFORMAT_LIBRARY_DIRS}
+                ${PC_AVCODEC_LIBRARY_DIRS}
+                ${PC_AVUTIL_LIBRARY_DIRS}
+                ${PC_SWSCALE_LIBRARY_DIRS}
+                ${PC_SWRESAMPLE_LIBRARY_DIRS}
+            )
+            list(REMOVE_DUPLICATES FFMPEG_LIBRARY_DIRS)
+            link_directories(${FFMPEG_LIBRARY_DIRS})
         else()
             message(STATUS "pkg-config failed to find all FFmpeg components, falling back to manual search")
             set(PKGCONFIG_FAILED TRUE)

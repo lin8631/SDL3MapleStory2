@@ -8,7 +8,7 @@ on:
 
 jobs:
   macos:
-    runs-on: macos-latest
+    runs-on: macos-14   # 使用 Apple Silicon runner，确保构建 arm64 二进制
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,6 +34,7 @@ jobs:
                 -DCMAKE_BUILD_TYPE=Release \
                 -DCMAKE_CXX_FLAGS="${{ env.CFLAGS }}" \
                 -DCMAKE_EXE_LINKER_FLAGS="${{ env.LDFLAGS }}" \
+                -DCMAKE_OSX_ARCHITECTURES=arm64 \   # 强制生成 arm64 二进制
                 -S .
 
       - name: Build
@@ -58,16 +59,13 @@ jobs:
           EXEDIR=$(dirname "$EXE")
           LIBDIR="$EXEDIR/lib"
           mkdir -p "$LIBDIR"
-          # 保存库目录的绝对路径供上传使用
           echo "LIB_PATH=$LIBDIR" >> $GITHUB_ENV
 
           # 找出依赖的 FFmpeg 库（以 libav 或 libsw 开头）
           deps=$(otool -L "$EXE" | grep -E 'libav|libsw' | awk '{print $1}')
           for dep in $deps; do
-            # 如果依赖是相对路径（如 @rpath/...），需要找到真实路径
             if [[ "$dep" != /* ]]; then
               base=$(basename "$dep")
-              # 在 Homebrew 默认路径中查找
               found=$(find /usr/local/lib /opt/homebrew/lib -name "$base" 2>/dev/null | head -n 1)
               if [ -n "$found" ]; then
                 dep="$found"
@@ -77,12 +75,10 @@ jobs:
               fi
             fi
             cp "$dep" "$LIBDIR/"
-            # 修改库的 ID 为 @rpath/库名
             newname="@rpath/$(basename "$dep")"
             install_name_tool -id "$newname" "$LIBDIR/$(basename "$dep")"
           done
 
-          # 修改可执行文件对库的依赖路径
           for lib in "$LIBDIR"/*.dylib; do
             base=$(basename "$lib")
             oldpath=$(otool -L "$EXE" | grep "$base" | awk '{print $1}')
@@ -91,12 +87,10 @@ jobs:
             fi
           done
 
-          # 设置可执行文件的 rpath 为 @executable_path/lib
           install_name_tool -add_rpath "@executable_path/lib" "$EXE"
-
           echo "FFmpeg libraries copied and RPATH set."
 
-      # 上传可执行文件和库（使用绝对路径）
+      # 上传可执行文件和库
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

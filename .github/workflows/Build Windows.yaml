@@ -61,15 +61,15 @@ jobs:
           Write-Host "FFmpeg DLLs copied to build directory"
 
       # 不上传整个 build 目录（只包含 exe 和 DLL）
-- name: Upload artifacts
-  uses: actions/upload-artifact@v4
-  with:
-    name: sdlMS-windows
-    path: |
-      build/sdlMS.exe
-      build/avcodec-*.dll
-      build/avformat-*.dll
-      build/avutil-*.dll
-      build/swscale-*.dll
-      build/swresample-*.dll
-    if-no-files-found: error
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdlMS-windows
+          path: |
+            build/sdlMS.exe
+            build/avcodec-*.dll
+            build/avformat-*.dll
+            build/avutil-*.dll
+            build/swscale-*.dll
+            build/swresample-*.dll
+          if-no-files-found: error

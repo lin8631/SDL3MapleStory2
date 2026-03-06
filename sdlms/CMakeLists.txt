@@ -187,6 +187,11 @@ file(GLOB SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/**/*.cpp)
 
 add_executable(sdlMS ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp ${SOURCE_FILES})
 
+# 为 Windows 平台添加 NOMINMAX 定义，防止 min/max 宏与 std::min/std::max 冲突
+if(WIN32)
+    target_compile_definitions(sdlMS PRIVATE NOMINMAX)
+endif()
+
 target_link_libraries(sdlMS PRIVATE SDL3::SDL3)
 target_link_libraries(sdlMS PRIVATE wzlib)
 target_link_libraries(sdlMS PRIVATE freetype)
@@ -199,7 +204,7 @@ endif()
 if(WIN32)
         if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
                 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /utf-8")
-                add_definitions(-DNOMINMAX)
+                # add_definitions(-DNOMINMAX)  # 已移至上面的 target_compile_definitions
         endif()
 
         set_target_properties(sdlMS PROPERTIES

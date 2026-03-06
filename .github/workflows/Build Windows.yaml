@@ -1,4 +1,4 @@
-name: Build with Clang 19 + Ninja
+name: Build Windows（Clang 19 + Ninja）
 
 on: [push, pull_request]
 
@@ -45,3 +45,11 @@ jobs:
 
       - name: Build
         run: ninja -C build
+
+      # 上传构建产物
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdlMS-windows
+          path: build/sdlMS.exe   # 根据您的 CMake 设置，可执行文件输出在 build/ 目录下
+          if-no-files-found: error

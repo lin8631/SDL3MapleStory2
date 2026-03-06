@@ -40,7 +40,6 @@ jobs:
       - name: Build
         run: cmake --build build
 
-      # 查找可执行文件并设置为环境变量
       - name: Find executable
         id: find_exe
         run: |
@@ -52,7 +51,6 @@ jobs:
           echo "EXE_PATH=$EXE" >> $GITHUB_ENV
           echo "Found executable at: $EXE"
 
-      # 复制所有非系统依赖库并设置 RPATH
       - name: Copy dependencies and set RPATH
         run: |
           EXE="${{ env.EXE_PATH }}"
@@ -61,11 +59,9 @@ jobs:
           mkdir -p "$LIBDIR"
           echo "LIB_PATH=$LIBDIR" >> $GITHUB_ENV
 
-          # 获取所有非系统、非框架的依赖库路径
           deps=$(otool -L "$EXE" | grep -v '^@' | grep -v '/System/' | grep -v '/usr/lib/' | awk '{print $1}' | grep -v ':$')
           for dep in $deps; do
             if [[ "$dep" != /* ]]; then
-              # 如果是相对路径，尝试在 Homebrew 路径查找
               base=$(basename "$dep")
               found=$(find /usr/local/lib /opt/homebrew/lib -name "$base" 2>/dev/null | head -n 1)
               if [ -n "$found" ]; then
@@ -75,31 +71,37 @@ jobs:
                 continue
               fi
             fi
-            # 复制库文件（不覆盖已存在文件）
             cp -n "$dep" "$LIBDIR/" || true
           done
 
-          # 修改所有复制进来的库的 ID
           for lib in "$LIBDIR"/*.dylib; do
             base=$(basename "$lib")
             install_name_tool -id "@rpath/$base" "$lib"
           done
 
-          # 修改可执行文件对库的依赖路径
           for lib in "$LIBDIR"/*.dylib; do
             base=$(basename "$lib")
-            # 查找可执行文件中引用该库的旧路径（可能包含版本号）
             oldpath=$(otool -L "$EXE" | grep "$base" | grep -v '^@' | awk '{print $1}' | head -n 1)
             if [ -n "$oldpath" ]; then
               install_name_tool -change "$oldpath" "@rpath/$base" "$EXE"
             fi
           done
 
-          # 设置可执行文件的 rpath
           install_name_tool -add_rpath "@executable_path/lib" "$EXE"
           echo "Dependencies copied and RPATH set."
 
-      # 上传可执行文件和所有依赖库
+      - name: Ad-hoc sign binaries
+        run: |
+          EXE="${{ env.EXE_PATH }}"
+          LIBDIR="${{ env.LIB_PATH }}"
+          # 签名所有动态库
+          for lib in "$LIBDIR"/*.dylib; do
+            codesign --force --deep --sign - "$lib"
+          done
+          # 签名主程序
+          codesign --force --deep --sign - "$EXE"
+          echo "Ad-hoc signing completed."
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

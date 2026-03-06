@@ -5,13 +5,136 @@ include_directories("${CMAKE_SOURCE_DIR}/Game/wzlibcpp")
 include_directories("${CMAKE_SOURCE_DIR}/Game/wzlibcpp/include")
 include_directories("${CMAKE_SOURCE_DIR}/Game/wzlibcpp/mio/include")
 
-# ffmpeg
-if(WIN32)
-    include_directories("C:/ffmpeg-master-latest-win64-gpl-shared/include")
-    link_directories("C:/ffmpeg-master-latest-win64-gpl-shared/lib")
+# 查找 FFmpeg 组件（非 Emscripten 平台）
+if(NOT EMSCRIPTEN)
+    # 尝试使用 pkg-config 查找 FFmpeg
+    find_package(PkgConfig QUIET)
+    if(PKG_CONFIG_FOUND)
+        pkg_check_modules(PC_AVFORMAT QUIET libavformat)
+        pkg_check_modules(PC_AVCODEC  QUIET libavcodec)
+        pkg_check_modules(PC_AVUTIL   QUIET libavutil)
+        pkg_check_modules(PC_SWSCALE  QUIET libswscale)
+        pkg_check_modules(PC_SWRESAMPLE QUIET libswresample)
 
-    include_directories("C:/FFMPEG-WEB/include")
-    link_directories("C:/FFMPEG-WEB/lib")
+        if(PC_AVFORMAT_FOUND AND PC_AVCODEC_FOUND AND PC_AVUTIL_FOUND AND PC_SWSCALE_FOUND AND PC_SWRESAMPLE_FOUND)
+            message(STATUS "Found FFmpeg via pkg-config")
+            set(FFMPEG_LIBRARIES
+                PkgConfig::AVFORMAT
+                PkgConfig::AVCODEC
+                PkgConfig::AVUTIL
+                PkgConfig::SWSCALE
+                PkgConfig::SWRESAMPLE
+            )
+        else()
+            message(STATUS "pkg-config failed to find all FFmpeg components, falling back to manual search")
+            set(PKGCONFIG_FAILED TRUE)
+        endif()
+    else()
+        message(STATUS "pkg-config not found, falling back to manual search")
+        set(PKGCONFIG_FAILED TRUE)
+    endif()
+
+    if(PKGCONFIG_FAILED)
+        # 允许用户通过 FFMPEG_ROOT 变量指定 FFmpeg 安装根目录
+        if(NOT DEFINED FFMPEG_ROOT)
+            set(FFMPEG_ROOT "" CACHE PATH "Path to FFmpeg installation (containing include/ and lib/)")
+        endif()
+
+        # 定义 FFmpeg 各组件的头文件和库文件名
+        set(FFMPEG_COMPONENTS avformat avcodec avutil swscale swresample)
+        set(FFMPEG_POSSIBLE_INCLUDE_SUFFIXES include include/ffmpeg)
+        set(FFMPEG_POSSIBLE_LIB_SUFFIXES lib lib64)
+
+        if(WIN32)
+            set(FFMPEG_POSSIBLE_BASE_PATHS
+                "C:/vcpkg/installed/x64-windows"
+                "C:/msys64/mingw64"
+                "C:/Program Files/FFmpeg"
+                "C:/FFmpeg"
+                "$ENV{FFMPEG_ROOT}"
+            )
+        elseif(APPLE)
+            set(FFMPEG_POSSIBLE_BASE_PATHS
+                "/usr/local"
+                "/opt/homebrew"
+                "/opt/local"
+                "/usr"
+            )
+        else() # Linux/Unix
+            set(FFMPEG_POSSIBLE_BASE_PATHS
+                "/usr/local"
+                "/usr"
+                "/opt/ffmpeg"
+            )
+        endif()
+
+        if(FFMPEG_ROOT)
+            list(INSERT FFMPEG_POSSIBLE_BASE_PATHS 0 ${FFMPEG_ROOT})
+        endif()
+
+        # 循环查找每个组件的头文件和库
+        foreach(COMP ${FFMPEG_COMPONENTS})
+            string(TOUPPER ${COMP} COMP_UPPER)
+
+            find_path(FFMPEG_${COMP_UPPER}_INCLUDE_DIR
+                NAMES lib${COMP}/${COMP}.h
+                PATHS ${FFMPEG_POSSIBLE_BASE_PATHS}
+                PATH_SUFFIXES ${FFMPEG_POSSIBLE_INCLUDE_SUFFIXES}
+                NO_DEFAULT_PATH
+            )
+
+            find_library(FFMPEG_${COMP_UPPER}_LIBRARY
+                NAMES ${COMP}
+                PATHS ${FFMPEG_POSSIBLE_BASE_PATHS}
+                PATH_SUFFIXES ${FFMPEG_POSSIBLE_LIB_SUFFIXES}
+                NO_DEFAULT_PATH
+            )
+
+            if(FFMPEG_${COMP_UPPER}_INCLUDE_DIR AND FFMPEG_${COMP_UPPER}_LIBRARY)
+                set(FFMPEG_${COMP_UPPER}_FOUND TRUE)
+                list(APPEND FFMPEG_INCLUDE_DIRS ${FFMPEG_${COMP_UPPER}_INCLUDE_DIR})
+                list(APPEND FFMPEG_LIBRARIES ${FFMPEG_${COMP_UPPER}_LIBRARY})
+            else()
+                set(FFMPEG_${COMP_UPPER}_FOUND FALSE)
+                message(STATUS "FFmpeg component ${COMP} not found in default paths.")
+            endif()
+        endforeach()
+
+        # 检查是否所有必需组件都找到
+        set(REQUIRED_COMPONENTS avformat avcodec avutil swscale swresample)
+        set(ALL_FOUND TRUE)
+        foreach(COMP ${REQUIRED_COMPONENTS})
+            string(TOUPPER ${COMP} COMP_UPPER)
+            if(NOT FFMPEG_${COMP_UPPER}_FOUND)
+                set(ALL_FOUND FALSE)
+                break()
+            endif()
+        endforeach()
+
+        if(NOT ALL_FOUND)
+            if(WIN32)
+                message(STATUS "FFmpeg not found in standard paths, trying hardcoded Windows path")
+                # 硬编码路径（根据用户要求）
+                set(HARDCODED_FFMPEG_PATH "C:/ffmpeg-master-latest-win64-gpl-shared")
+                if(EXISTS "${HARDCODED_FFMPEG_PATH}/include" AND EXISTS "${HARDCODED_FFMPEG_PATH}/lib")
+                    include_directories("${HARDCODED_FFMPEG_PATH}/include")
+                    link_directories("${HARDCODED_FFMPEG_PATH}/lib")
+                    # 设置库变量为硬编码库名
+                    set(FFMPEG_LIBRARIES avformat avcodec avutil swscale swresample)
+                    message(STATUS "Using hardcoded FFmpeg path: ${HARDCODED_FFMPEG_PATH}")
+                else()
+                    message(FATAL_ERROR "Required FFmpeg components not found. Please install FFmpeg or set FFMPEG_ROOT to the correct path.")
+                endif()
+            else()
+                message(FATAL_ERROR "Required FFmpeg components not found. Please install FFmpeg or set FFMPEG_ROOT to the correct path.")
+            endif()
+        else()
+            # 所有组件找到，添加头文件路径并去重
+            list(REMOVE_DUPLICATES FFMPEG_INCLUDE_DIRS)
+            list(REMOVE_DUPLICATES FFMPEG_LIBRARIES)
+            include_directories(${FFMPEG_INCLUDE_DIRS})
+        endif()
+    endif()
 endif()
 
 if(EMSCRIPTEN)
@@ -26,9 +149,10 @@ endif()
 
 file(GLOB SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/**/*.cpp)
 
-if(EMSCRIPTEN)
-    list(REMOVE_ITEM SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/Components/Sound.cpp")
-endif()
+# 重要：不要移除 Sound.cpp，请通过条件编译处理（在 Sound.cpp 中使用 #ifndef __EMSCRIPTEN__）
+# if(EMSCRIPTEN)
+#     list(REMOVE_ITEM SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/Components/Sound.cpp")
+# endif()
 
 add_executable(sdlMS ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp ${SOURCE_FILES})
 
@@ -38,7 +162,7 @@ target_link_libraries(sdlMS PRIVATE freetype)
 target_link_libraries(sdlMS PRIVATE EnTT)
 
 if(NOT EMSCRIPTEN)
-    target_link_libraries(sdlMS PRIVATE avformat avcodec avutil swscale swresample)
+    target_link_libraries(sdlMS PRIVATE ${FFMPEG_LIBRARIES})
 endif()
 
 if(WIN32)

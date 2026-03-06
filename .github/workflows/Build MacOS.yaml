@@ -39,55 +39,67 @@ jobs:
       - name: Build
         run: cmake --build build
 
-      - name: Copy FFmpeg libraries and set install name
+      # 查找可执行文件并设置为环境变量
+      - name: Find executable
+        id: find_exe
         run: |
-          # 查找可执行文件
-          EXE=$(find build -type f -name "sdlMS" | head -n 1)
+          EXE=$(find ${{ github.workspace }}/build -type f -name "sdlMS" | head -n 1)
           if [ -z "$EXE" ]; then
-            echo "Executable not found"
+            echo "No executable found" >&2
             exit 1
           fi
+          echo "EXE_PATH=$EXE" >> $GITHUB_ENV
+          echo "Found executable at: $EXE"
+
+      # 复制 FFmpeg 库并修改 RPATH
+      - name: Copy FFmpeg libraries and set RPATH
+        run: |
+          EXE="${{ env.EXE_PATH }}"
           EXEDIR=$(dirname "$EXE")
           LIBDIR="$EXEDIR/lib"
           mkdir -p "$LIBDIR"
 
-          # 使用 otool 找出依赖的 FFmpeg 库（通常位于 /usr/local/lib 或 /opt/homebrew/lib）
+          # 找出依赖的 FFmpeg 库（以 libav 或 libsw 开头）
           deps=$(otool -L "$EXE" | grep -E 'libav|libsw' | awk '{print $1}')
           for dep in $deps; do
-            # 解析绝对路径（如果 dep 是相对路径，则使用其真实路径）
+            # 如果依赖是相对路径（如 @rpath/...），需要找到真实路径
             if [[ "$dep" != /* ]]; then
-              # 尝试在 brew 路径中查找
               base=$(basename "$dep")
+              # 在 Homebrew 默认路径中查找
               found=$(find /usr/local/lib /opt/homebrew/lib -name "$base" 2>/dev/null | head -n 1)
               if [ -n "$found" ]; then
                 dep="$found"
               else
-                echo "Cannot locate $dep"
+                echo "Warning: Cannot locate $dep, skipping"
                 continue
               fi
             fi
             cp "$dep" "$LIBDIR/"
-            # 修改库自身的 ID 为 @rpath/...（可选，但推荐）
+            # 修改库的 ID 为 @rpath/库名
             newname="@rpath/$(basename "$dep")"
             install_name_tool -id "$newname" "$LIBDIR/$(basename "$dep")"
           done
 
-          # 修改可执行文件的依赖路径为 @rpath
+          # 修改可执行文件对库的依赖路径
           for lib in "$LIBDIR"/*.dylib; do
             base=$(basename "$lib")
-            install_name_tool -change "$(otool -L "$EXE" | grep "$base" | awk '{print $1}')" "@rpath/$base" "$EXE"
+            oldpath=$(otool -L "$EXE" | grep "$base" | awk '{print $1}')
+            if [ -n "$oldpath" ]; then
+              install_name_tool -change "$oldpath" "@rpath/$base" "$EXE"
+            fi
           done
 
           # 设置可执行文件的 rpath 为 @executable_path/lib
           install_name_tool -add_rpath "@executable_path/lib" "$EXE"
 
-          echo "FFmpeg libraries copied and install names updated."
+          echo "FFmpeg libraries copied and RPATH set."
 
-      - name: Upload artifact (executable + libraries)
+      # 上传可执行文件和库
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: sdlMS-macos
           path: |
             ${{ env.EXE_PATH }}
-            build/**/lib/*.dylib
+            ${{ env.EXE_PATH }}/../lib/*.dylib
           if-no-files-found: error

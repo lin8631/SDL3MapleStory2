@@ -1,4 +1,4 @@
-name: Build macOS
+name: Build MacOS
 
 on:
   push:
@@ -39,21 +39,55 @@ jobs:
       - name: Build
         run: cmake --build build
 
-      # 递归查找可执行文件
-      - name: Find executable
-        id: find_exe
+      - name: Copy FFmpeg libraries and set install name
         run: |
-          EXE=$(find ${{ github.workspace }} -type f -name "sdlMS" -o -name "sdlMS.exe" | head -n 1)
+          # 查找可执行文件
+          EXE=$(find build -type f -name "sdlMS" | head -n 1)
           if [ -z "$EXE" ]; then
-            echo "No executable found" >&2
+            echo "Executable not found"
             exit 1
           fi
-          echo "EXE_PATH=$EXE" >> $GITHUB_ENV
-          echo "Found executable at: $EXE"
+          EXEDIR=$(dirname "$EXE")
+          LIBDIR="$EXEDIR/lib"
+          mkdir -p "$LIBDIR"
 
-      - name: Upload executable
+          # 使用 otool 找出依赖的 FFmpeg 库（通常位于 /usr/local/lib 或 /opt/homebrew/lib）
+          deps=$(otool -L "$EXE" | grep -E 'libav|libsw' | awk '{print $1}')
+          for dep in $deps; do
+            # 解析绝对路径（如果 dep 是相对路径，则使用其真实路径）
+            if [[ "$dep" != /* ]]; then
+              # 尝试在 brew 路径中查找
+              base=$(basename "$dep")
+              found=$(find /usr/local/lib /opt/homebrew/lib -name "$base" 2>/dev/null | head -n 1)
+              if [ -n "$found" ]; then
+                dep="$found"
+              else
+                echo "Cannot locate $dep"
+                continue
+              fi
+            fi
+            cp "$dep" "$LIBDIR/"
+            # 修改库自身的 ID 为 @rpath/...（可选，但推荐）
+            newname="@rpath/$(basename "$dep")"
+            install_name_tool -id "$newname" "$LIBDIR/$(basename "$dep")"
+          done
+
+          # 修改可执行文件的依赖路径为 @rpath
+          for lib in "$LIBDIR"/*.dylib; do
+            base=$(basename "$lib")
+            install_name_tool -change "$(otool -L "$EXE" | grep "$base" | awk '{print $1}')" "@rpath/$base" "$EXE"
+          done
+
+          # 设置可执行文件的 rpath 为 @executable_path/lib
+          install_name_tool -add_rpath "@executable_path/lib" "$EXE"
+
+          echo "FFmpeg libraries copied and install names updated."
+
+      - name: Upload artifact (executable + libraries)
         uses: actions/upload-artifact@v4
         with:
           name: sdlMS-macos
-          path: ${{ env.EXE_PATH }}
+          path: |
+            ${{ env.EXE_PATH }}
+            build/**/lib/*.dylib
           if-no-files-found: error

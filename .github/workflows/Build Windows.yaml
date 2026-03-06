@@ -60,10 +60,16 @@ jobs:
           # 可选：如果还有其他依赖（如 zlib、SDL 等）也需要复制，但 SDL 已静态链接，zlib 可能静态链接，暂不处理
           Write-Host "FFmpeg DLLs copied to build directory"
 
-      # 上传整个 build 目录（包含 exe 和 DLL）
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: sdlMS-windows
-          path: build/
-          if-no-files-found: error
+      # 不上传整个 build 目录（只包含 exe 和 DLL）
+- name: Upload artifacts
+  uses: actions/upload-artifact@v4
+  with:
+    name: sdlMS-windows
+    path: |
+      build/sdlMS.exe
+      build/avcodec-*.dll
+      build/avformat-*.dll
+      build/avutil-*.dll
+      build/swscale-*.dll
+      build/swresample-*.dll
+    if-no-files-found: error

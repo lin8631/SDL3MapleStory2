@@ -8,6 +8,8 @@
 #include <thread>
 #include <list>
 
+#ifndef __EMSCRIPTEN__
+// ==================== 实际实现（依赖 FFmpeg）====================
 extern "C"
 {
 #include <libavformat/avformat.h>
@@ -28,12 +30,10 @@ void mixAudio(Uint8 *audio1, Uint8 *audio2, Uint8 *output, int length)
         int16_t sample1 = reinterpret_cast<const int16_t *>(audio1)[i / 2];
         int16_t sample2 = reinterpret_cast<const int16_t *>(audio2)[i / 2];
         int32_t mixedSample = sample1 + sample2;
-        // 限制范围
         if (mixedSample > INT16_MAX)
             mixedSample = INT16_MAX;
         if (mixedSample < INT16_MIN)
             mixedSample = INT16_MIN;
-        // 存储混合结果
         reinterpret_cast<int16_t *>(output)[i / 2] = static_cast<int16_t>(mixedSample);
     }
 }
@@ -67,7 +67,7 @@ static void SDLCALL FeedTheAudioStreamMore(void *userdata, SDL_AudioStream *astr
                     }
                     else
                     {
-                        it = sound_list.erase(it); // 删除当前元素并更新迭代器
+                        it = sound_list.erase(it);
                         continue;
                     }
                 }
@@ -125,27 +125,24 @@ Sound::Wrap::Wrap(wz::Node *node)
 
     memcpy(buffer, data.data(), data.size());
     AVIOContext *ioCtx = avio_alloc_context(
-        (uint8_t *)buffer, // 输入数据
-        buffer_size,       // 数据大小
-        0,                 // 读写模式（0表示只读）
-        NULL,              // 用户自定义数据
-        NULL,              // 读取函数（将使用内存数据）
-        NULL,              // 写入函数（未使用）
-        NULL               // 清理函数（未使用）
+        (uint8_t *)buffer,
+        buffer_size,
+        0,
+        NULL,
+        NULL,
+        NULL,
+        NULL
     );
 
-    // 打开输入文件并读取音频流信息
     AVFormatContext *formatContext = avformat_alloc_context();
     formatContext->pb = ioCtx;
 
     if (avformat_open_input(&formatContext, nullptr, nullptr, nullptr) != 0)
     {
-        // 处理打开文件失败的情况
         return;
     }
     if (avformat_find_stream_info(formatContext, nullptr) < 0)
     {
-        // 处理找不到音频流信息的情况
         return;
     }
 
@@ -153,8 +150,6 @@ Sound::Wrap::Wrap(wz::Node *node)
     int audioStreamIndex = av_find_best_stream(formatContext, AVMEDIA_TYPE_AUDIO, -1, -1, &codec, 0);
     if (audioStreamIndex == -1 || !codec)
     {
-        // 打开音频解码器并分配解码上下文
-        // 处理找不到音频流的情况
         return;
     }
     AVCodecParameters *codecParameters = formatContext->streams[audioStreamIndex]->codecpar;
@@ -162,40 +157,30 @@ Sound::Wrap::Wrap(wz::Node *node)
     AVCodecContext *codecContext = avcodec_alloc_context3(codec);
     if (!codecContext)
     {
-        // 处理无法分配解码上下文的情况
         return;
     }
-    // 设置多线程解码
     codecContext->thread_count = std::thread::hardware_concurrency();
 
     if (avcodec_parameters_to_context(codecContext, codecParameters) < 0)
     {
-        // 处理无法设置解码器参数的情况
         return;
     }
     if (avcodec_open2(codecContext, codec, nullptr) < 0)
     {
-        // 处理无法打开解码器的情况
         return;
     }
 
-    // 解码音频帧
     AVPacket *packet = av_packet_alloc();
     AVFrame *frame = av_frame_alloc();
 
     SwrContext *swrContext = swr_alloc();
-    // 音频格式  输入的采样设置参数
     AVSampleFormat Wraprmat = codecContext->sample_fmt;
-    // 出入的采样格式
     AVSampleFormat outFormat = AV_SAMPLE_FMT_S16;
-    // 输入采样率
     int inSampleRate = codecContext->sample_rate;
-    // 输出采样率
     int outSampleRate = 44100;
 
     AVChannelLayout outChannel = {};
     outChannel.nb_channels = 2;
-
     int outChannelCount = outChannel.nb_channels;
 
     swr_alloc_set_opts2(&swrContext, &outChannel, outFormat, outSampleRate,
@@ -206,7 +191,6 @@ Sound::Wrap::Wrap(wz::Node *node)
         return;
     }
 
-    // 分配输出缓冲区
     uint8_t *output_data = (uint8_t *)av_malloc(outSampleRate);
     while (av_read_frame(formatContext, packet) >= 0)
     {
@@ -264,8 +248,7 @@ void Sound::push(Sound::Wrap *souw, int delay, int pos)
     else
     {
         auto it = sound_list.begin();
-        std::advance(it, pos); // 移动迭代器
-        // 插入元素
+        std::advance(it, pos);
         sound_list.insert(it, sou);
     }
     SDL_UnlockMutex(sound_list_mutex);
@@ -281,8 +264,7 @@ void Sound::push(Sound sou, int pos)
     else
     {
         auto it = sound_list.begin();
-        std::advance(it, pos); // 移动迭代器
-        // 插入元素
+        std::advance(it, pos);
         sound_list.insert(it, sou);
     }
     SDL_UnlockMutex(sound_list_mutex);
@@ -296,8 +278,8 @@ void Sound::remove(int pos)
         pos = 1;
     }
     auto it = sound_list.begin();
-    std::advance(it, pos - 1); // 迭代器前进到第 pos 个元素
-    sound_list.erase(it);      // 删除该元素
+    std::advance(it, pos - 1);
+    sound_list.erase(it);
     SDL_UnlockMutex(sound_list_mutex);
 }
 
@@ -308,9 +290,33 @@ Sound *Sound::at(int pos)
     if (pos < sound_list.size())
     {
         auto it = sound_list.begin();
-        std::advance(it, pos); // 迭代器前进到第 pos 个元素
+        std::advance(it, pos);
         r = &(*it);
     }
     SDL_UnlockMutex(sound_list_mutex);
     return r;
 }
+
+#else
+// ==================== Emscripten 下的空实现 ====================
+
+// 提供空函数体，避免链接错误
+static SDL_Mutex *sound_list_mutex = nullptr;
+static std::list<Sound> sound_list;
+SDL_AudioStream *audio_stream = nullptr;
+
+bool Sound::init() { return true; }
+
+Sound::Wrap *Sound::Wrap::load(wz::Node *node) { return nullptr; }
+
+Sound::Wrap::Wrap(wz::Node *node) {}
+
+Sound::Sound(wz::Node *node, int d) {}
+Sound::Sound(const std::u16string &path, int d) {}
+
+void Sound::push(Sound::Wrap *souw, int delay, int pos) {}
+void Sound::push(Sound sou, int pos) {}
+void Sound::remove(int pos) {}
+Sound *Sound::at(int pos) { return nullptr; }
+
+#endif

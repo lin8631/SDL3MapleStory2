@@ -179,11 +179,6 @@ endif()
 
 file(GLOB SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/**/*.cpp)
 
-# 重要：不要移除 Sound.cpp，请通过条件编译处理（在 Sound.cpp 中使用 #ifndef __EMSCRIPTEN__）
-# if(EMSCRIPTEN)
-#     list(REMOVE_ITEM SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/Components/Sound.cpp")
-# endif()
-
 add_executable(sdlMS ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp ${SOURCE_FILES})
 
 # 为 Windows 平台添加 NOMINMAX 定义，防止 min/max 宏与 std::min/std::max 冲突
@@ -200,15 +195,17 @@ if(NOT EMSCRIPTEN)
     # 链接 FFmpeg 库（通过 pkg-config 或手动查找得到）
     target_link_libraries(sdlMS PRIVATE ${FFMPEG_LIBRARIES})
 
-    # 显式查找并链接 Brotli 静态库（适用于 vcpkg 安装的静态版本）
-    find_library(BROTLI_COMMON_LIB NAMES brotlicommon)
-    find_library(BROTLI_DEC_LIB    NAMES brotlidec)
-    find_library(BROTLI_ENC_LIB    NAMES brotlienc)
-    if(BROTLI_COMMON_LIB AND BROTLI_DEC_LIB AND BROTLI_ENC_LIB)
-        target_link_libraries(sdlMS PRIVATE ${BROTLI_COMMON_LIB} ${BROTLI_DEC_LIB} ${BROTLI_ENC_LIB})
-        message(STATUS "Found Brotli static libraries: ${BROTLI_COMMON_LIB}, ${BROTLI_DEC_LIB}, ${BROTLI_ENC_LIB}")
-    else()
-        message(FATAL_ERROR "Brotli libraries not found. Please ensure brotli is installed via vcpkg.")
+    # macOS 静态构建需要显式链接 Brotli 静态库（解决符号缺失）
+    if(APPLE)
+        find_library(BROTLI_COMMON_LIB NAMES brotlicommon)
+        find_library(BROTLI_DEC_LIB    NAMES brotlidec)
+        find_library(BROTLI_ENC_LIB    NAMES brotlienc)
+        if(BROTLI_COMMON_LIB AND BROTLI_DEC_LIB AND BROTLI_ENC_LIB)
+            target_link_libraries(sdlMS PRIVATE ${BROTLI_COMMON_LIB} ${BROTLI_DEC_LIB} ${BROTLI_ENC_LIB})
+            message(STATUS "Found Brotli static libraries for macOS")
+        else()
+            message(WARNING "Brotli static libraries not found on macOS. Static linking may fail.")
+        endif()
     endif()
 endif()
 

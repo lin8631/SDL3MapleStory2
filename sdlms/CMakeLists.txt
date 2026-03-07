@@ -200,17 +200,15 @@ if(NOT EMSCRIPTEN)
     # 链接 FFmpeg 库（通过 pkg-config 或手动查找得到）
     target_link_libraries(sdlMS PRIVATE ${FFMPEG_LIBRARIES})
 
-    # 显式链接 Brotli 公共库（用于静态构建，解决符号缺失）
-    # 如果使用 vcpkg 工具链，可以通过 find_package 找到 Brotli 目标
-    find_package(Brotli CONFIG QUIET)
-    if(Brotli_FOUND)
-        target_link_libraries(sdlMS PRIVATE Brotli::brotlicommon)
-        message(STATUS "Found Brotli via CMake config")
+    # 显式查找并链接 Brotli 静态库（适用于 vcpkg 安装的静态版本）
+    find_library(BROTLI_COMMON_LIB NAMES brotlicommon)
+    find_library(BROTLI_DEC_LIB    NAMES brotlidec)
+    find_library(BROTLI_ENC_LIB    NAMES brotlienc)
+    if(BROTLI_COMMON_LIB AND BROTLI_DEC_LIB AND BROTLI_ENC_LIB)
+        target_link_libraries(sdlMS PRIVATE ${BROTLI_COMMON_LIB} ${BROTLI_DEC_LIB} ${BROTLI_ENC_LIB})
+        message(STATUS "Found Brotli static libraries: ${BROTLI_COMMON_LIB}, ${BROTLI_DEC_LIB}, ${BROTLI_ENC_LIB}")
     else()
-        # 回退到 pkg-config 查找 libbrotlicommon
-        pkg_check_modules(BROTLI REQUIRED libbrotlicommon)
-        target_link_libraries(sdlMS PRIVATE ${BROTLI_LIBRARIES})
-        message(STATUS "Found Brotli via pkg-config")
+        message(FATAL_ERROR "Brotli libraries not found. Please ensure brotli is installed via vcpkg.")
     endif()
 endif()
 

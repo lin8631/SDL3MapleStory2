@@ -59,7 +59,18 @@ jobs:
           mkdir -p "$LIBDIR"
           echo "LIB_PATH=$LIBDIR" >> $GITHUB_ENV
 
-          declare -A processed
+          # 普通数组用于去重（兼容 Bash 3.2）
+          processed=()
+
+          is_processed() {
+            local item="$1"
+            for p in "${processed[@]}"; do
+              if [ "$p" = "$item" ]; then
+                return 0
+              fi
+            done
+            return 1
+          }
 
           process_file() {
             local file="$1"
@@ -86,10 +97,10 @@ jobs:
                 continue
               fi
               
-              if [ -z "${processed[$base]}" ]; then
+              if ! is_processed "$base"; then
                 cp -n "$src" "$target" || true
                 install_name_tool -id "@rpath/$base" "$target"
-                processed[$base]=1
+                processed+=("$base")
                 process_file "$target" "lib"
               fi
               

@@ -1,0 +1,75 @@
+name: Build Windows（Clang 19 + Ninja）
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Initialize wzlibcpp submodules
+        run: |
+          cd Game/wzlibcpp
+          git submodule update --init --recursive
+
+      - name: Install LLVM (latest, 19+)
+        run: |
+          choco install llvm
+          echo "C:\Program Files\LLVM\bin" >> $env:GITHUB_PATH
+
+      - name: Install CMake and Ninja
+        run: |
+          choco install cmake --version=3.28.3
+          choco install ninja
+
+      - name: Install vcpkg and FFmpeg
+        run: |
+          git clone https://github.com/Microsoft/vcpkg.git
+          .\vcpkg\bootstrap-vcpkg.bat
+          .\vcpkg\vcpkg install ffmpeg:x64-windows
+
+      - name: Configure CMake
+        run: |
+          mkdir build
+          cd build
+          cmake .. -G Ninja `
+            -DCMAKE_C_COMPILER=clang `
+            -DCMAKE_CXX_COMPILER=clang++ `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake"
+
+      - name: Build
+        run: ninja -C build
+
+      # 复制 FFmpeg DLL 到输出目录
+      - name: Copy FFmpeg DLLs
+        run: |
+          $vcpkgBin = "${{ github.workspace }}\vcpkg\installed\x64-windows\bin"
+          $outputDir = "${{ github.workspace }}\build"
+          # 复制所有 FFmpeg 相关的 DLL（可根据实际需要调整模式）
+          Copy-Item -Path "$vcpkgBin\avcodec-*.dll" -Destination $outputDir
+          Copy-Item -Path "$vcpkgBin\avformat-*.dll" -Destination $outputDir
+          Copy-Item -Path "$vcpkgBin\avutil-*.dll" -Destination $outputDir
+          Copy-Item -Path "$vcpkgBin\swscale-*.dll" -Destination $outputDir
+          Copy-Item -Path "$vcpkgBin\swresample-*.dll" -Destination $outputDir
+          # 可选：如果还有其他依赖（如 zlib、SDL 等）也需要复制，但 SDL 已静态链接，zlib 可能静态链接，暂不处理
+          Write-Host "FFmpeg DLLs copied to build directory"
+
+      # 不上传整个 build 目录（只包含 exe 和 DLL）
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdlMS-windows
+          path: |
+            build/sdlMS.exe
+            build/avcodec-*.dll
+            build/avformat-*.dll
+            build/avutil-*.dll
+            build/swscale-*.dll
+            build/swresample-*.dll
+          if-no-files-found: error

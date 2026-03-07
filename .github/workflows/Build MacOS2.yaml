@@ -1,0 +1,127 @@
+name: Build MacOS
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install sdl2 freetype ffmpeg pkg-config
+
+      - name: Get FFmpeg flags via pkg-config
+        id: ffmpeg_flags
+        run: |
+          echo "CFLAGS=$(pkg-config --cflags libavformat libavcodec libavutil)" >> $GITHUB_ENV
+          echo "LDFLAGS=$(pkg-config --libs libavformat libavcodec libavutil)" >> $GITHUB_ENV
+
+      - name: Clean build
+        run: rm -rf build
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_CXX_FLAGS="${{ env.CFLAGS }}" \
+                -DCMAKE_EXE_LINKER_FLAGS="${{ env.LDFLAGS }}" \
+                -DCMAKE_OSX_ARCHITECTURES=arm64 \
+                -S .
+
+      - name: Build
+        run: cmake --build build
+
+      # 查找可执行文件并设置为环境变量
+      - name: Find executable
+        id: find_exe
+        run: |
+          EXE=$(find ${{ github.workspace }}/build -type f -name "sdlMS" | head -n 1)
+          if [ -z "$EXE" ]; then
+            echo "No executable found" >&2
+            exit 1
+          fi
+          echo "EXE_PATH=$EXE" >> $GITHUB_ENV
+          echo "Found executable at: $EXE"
+
+      # 递归复制所有依赖库并设置 RPATH
+      - name: Copy all dependencies recursively and set RPATH
+        run: |
+          EXE="${{ env.EXE_PATH }}"
+          EXEDIR=$(dirname "$EXE")
+          LIBDIR="$EXEDIR/lib"
+          mkdir -p "$LIBDIR"
+          echo "LIB_PATH=$LIBDIR" >> $GITHUB_ENV
+
+          # 函数：递归处理依赖库
+          function process_lib() {
+            local lib_path="$1"
+            local base_name=$(basename "$lib_path")
+            local target="$LIBDIR/$base_name"
+            
+            # 如果已存在，跳过（避免重复处理）
+            if [ -f "$target" ]; then
+              return
+            fi
+            
+            # 复制库文件
+            if [ -f "$lib_path" ]; then
+              cp -n "$lib_path" "$target" || true
+              # 修改库的 ID 为 @rpath/库名
+              install_name_tool -id "@rpath/$base_name" "$target"
+            else
+              echo "Warning: $lib_path not found"
+              return
+            fi
+            
+            # 递归处理该库的依赖
+            local deps=$(otool -L "$lib_path" | grep -v '^@' | grep -v '/System/' | grep -v '/usr/lib/' | awk '{print $1}' | grep -v ':$')
+            for dep in $deps; do
+              if [[ "$dep" != /* ]]; then
+                # 如果是相对路径，在 Homebrew 路径中查找
+                base=$(basename "$dep")
+                found=$(find /usr/local/lib /opt/homebrew/lib -name "$base" 2>/dev/null | head -n 1)
+                if [ -n "$found" ]; then
+                  dep="$found"
+                else
+                  echo "Warning: Cannot locate $dep, skipping"
+                  continue
+                fi
+              fi
+              process_lib "$dep"
+            done
+          }
+
+          # 从可执行文件开始递归
+          process_lib "$EXE"
+
+          # 修改可执行文件中对所有库的依赖路径为 @rpath
+          for lib in "$LIBDIR"/*.dylib; do
+            base=$(basename "$lib")
+            oldpath=$(otool -L "$EXE" | grep "$base" | grep -v '^@' | awk '{print $1}' | head -n 1)
+            if [ -n "$oldpath" ]; then
+              install_name_tool -change "$oldpath" "@rpath/$base" "$EXE"
+            fi
+          done
+
+          # 设置可执行文件的 rpath
+          install_name_tool -add_rpath "@executable_path/lib" "$EXE"
+          echo "All dependencies copied and RPATH set."
+
+      # 上传可执行文件和所有依赖库
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdlMS-macos
+          path: |
+            ${{ env.EXE_PATH }}
+            ${{ env.LIB_PATH }}/*.dylib
+          if-no-files-found: error

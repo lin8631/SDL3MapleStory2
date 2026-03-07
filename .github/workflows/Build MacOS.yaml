@@ -40,7 +40,6 @@ jobs:
       - name: Build
         run: cmake --build build
 
-      # 查找可执行文件并设置为环境变量
       - name: Find executable
         id: find_exe
         run: |
@@ -52,8 +51,7 @@ jobs:
           echo "EXE_PATH=$EXE" >> $GITHUB_ENV
           echo "Found executable at: $EXE"
 
-      # 递归复制所有依赖库并设置 RPATH
-      - name: Copy all dependencies recursively and set RPATH
+      - name: Copy all dependencies recursively and fix library dependencies
         run: |
           EXE="${{ env.EXE_PATH }}"
           EXEDIR=$(dirname "$EXE")
@@ -61,62 +59,53 @@ jobs:
           mkdir -p "$LIBDIR"
           echo "LIB_PATH=$LIBDIR" >> $GITHUB_ENV
 
-          # 函数：递归处理依赖库
-          function process_lib() {
-            local lib_path="$1"
-            local base_name=$(basename "$lib_path")
-            local target="$LIBDIR/$base_name"
+          declare -A processed
+
+          process_file() {
+            local file="$1"
+            local file_type="$2"
             
-            # 如果已存在，跳过（避免重复处理）
-            if [ -f "$target" ]; then
-              return
-            fi
+            local deps=$(otool -L "$file" | grep -v '^@' | grep -v '/System/' | grep -v '/usr/lib/' | awk '{print $1}' | grep -v ':$')
             
-            # 复制库文件
-            if [ -f "$lib_path" ]; then
-              cp -n "$lib_path" "$target" || true
-              # 修改库的 ID 为 @rpath/库名
-              install_name_tool -id "@rpath/$base_name" "$target"
-            else
-              echo "Warning: $lib_path not found"
-              return
-            fi
-            
-            # 递归处理该库的依赖
-            local deps=$(otool -L "$lib_path" | grep -v '^@' | grep -v '/System/' | grep -v '/usr/lib/' | awk '{print $1}' | grep -v ':$')
             for dep in $deps; do
-              if [[ "$dep" != /* ]]; then
-                # 如果是相对路径，在 Homebrew 路径中查找
-                base=$(basename "$dep")
-                found=$(find /usr/local/lib /opt/homebrew/lib -name "$base" 2>/dev/null | head -n 1)
-                if [ -n "$found" ]; then
-                  dep="$found"
-                else
-                  echo "Warning: Cannot locate $dep, skipping"
-                  continue
+              base=$(basename "$dep")
+              target="$LIBDIR/$base"
+              
+              if [[ "$dep" == @rpath/* ]] && [ -f "$target" ]; then
+                continue
+              fi
+              
+              if [[ "$dep" == /* ]]; then
+                src="$dep"
+              else
+                src=$(find /usr/local/lib /opt/homebrew/lib -name "$base" 2>/dev/null | head -n 1)
+              fi
+              
+              if [ -z "$src" ] || [ ! -f "$src" ]; then
+                echo "Warning: Cannot locate $dep for $file, skipping"
+                continue
+              fi
+              
+              if [ -z "${processed[$base]}" ]; then
+                cp -n "$src" "$target" || true
+                install_name_tool -id "@rpath/$base" "$target"
+                processed[$base]=1
+                process_file "$target" "lib"
+              fi
+              
+              if [[ "$file_type" == "exe" ]] || [[ "$file_type" == "lib" ]]; then
+                oldpath=$(otool -L "$file" | grep "$base" | grep -v '^@' | awk '{print $1}' | head -n 1)
+                if [ -n "$oldpath" ] && [ "$oldpath" != "@rpath/$base" ]; then
+                  install_name_tool -change "$oldpath" "@rpath/$base" "$file"
                 fi
               fi
-              process_lib "$dep"
             done
           }
 
-          # 从可执行文件开始递归
-          process_lib "$EXE"
+          process_file "$EXE" "exe"
+          install_name_tool -add_rpath "@executable_path/lib" "$EXE" 2>/dev/null || true
+          echo "All dependencies copied and library dependencies fixed."
 
-          # 修改可执行文件中对所有库的依赖路径为 @rpath
-          for lib in "$LIBDIR"/*.dylib; do
-            base=$(basename "$lib")
-            oldpath=$(otool -L "$EXE" | grep "$base" | grep -v '^@' | awk '{print $1}' | head -n 1)
-            if [ -n "$oldpath" ]; then
-              install_name_tool -change "$oldpath" "@rpath/$base" "$EXE"
-            fi
-          done
-
-          # 设置可执行文件的 rpath
-          install_name_tool -add_rpath "@executable_path/lib" "$EXE"
-          echo "All dependencies copied and RPATH set."
-
-      # 上传可执行文件和所有依赖库
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

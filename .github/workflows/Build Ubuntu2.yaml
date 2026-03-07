@@ -1,0 +1,77 @@
+name: Build Ubuntu (gcc)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  ubuntu-gcc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxi-dev libxcursor-dev libxfixes-dev libxrender-dev \
+            libwayland-dev wayland-protocols libxkbcommon-dev \
+            libdbus-1-dev libibus-1.0-dev libudev-dev \
+            libasound2-dev libpulse-dev libpipewire-0.3-dev \
+            libjack-jackd2-dev libsndio-dev \
+            libgl1-mesa-dev libgles2-mesa-dev \
+            libegl1-mesa-dev libdrm-dev libgbm-dev \
+            libusb-1.0-0-dev libunwind-dev \
+            libpng-dev libbz2-dev libharfbuzz-dev \
+            libfreetype-dev \
+            libavformat-dev libavcodec-dev libavutil-dev libswscale-dev
+
+      - name: Install patchelf (for RPATH modification)
+        run: sudo apt-get install -y patchelf
+
+      - name: Clean build
+        run: rm -rf build
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -S .
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Copy FFmpeg libraries and set RPATH
+        run: |
+          # 确定可执行文件路径
+          EXE="build/sdlms/sdlMS"
+          if [ ! -f "$EXE" ]; then
+            echo "Executable not found"
+            exit 1
+          fi
+
+          # 创建 lib 目录（可选，也可以直接放在可执行文件同目录）
+          LIBDIR="build/sdlms/lib"
+          mkdir -p "$LIBDIR"
+
+          # 使用 ldd 找出依赖的 FFmpeg 库（以 libav 开头）
+          deps=$(ldd "$EXE" | grep libav | awk '{print $3}')
+          for dep in $deps; do
+            cp "$dep" "$LIBDIR/"
+          done
+
+          # 修改 RPATH 使程序优先从 $ORIGIN/lib 查找库
+          patchelf --set-rpath '$ORIGIN/lib' "$EXE"
+
+          echo "FFmpeg libraries copied and RPATH set."
+
+      - name: Upload artifact (executable + libraries)
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdlMS-ubuntu
+          path: |
+            build/sdlms/sdlMS
+            build/sdlms/lib/*.so*
+          if-no-files-found: error

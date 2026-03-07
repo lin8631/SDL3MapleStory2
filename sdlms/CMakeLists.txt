@@ -27,7 +27,6 @@ if(NOT EMSCRIPTEN)
 
         if(PC_AVFORMAT_FOUND AND PC_AVCODEC_FOUND AND PC_AVUTIL_FOUND AND PC_SWSCALE_FOUND AND PC_SWRESAMPLE_FOUND)
             message(STATUS "Found FFmpeg via pkg-config")
-
             # 使用传统变量（避免 CMake 导入目标在部分环境失效的问题）
             set(FFMPEG_INCLUDE_DIRS
                 ${PC_AVFORMAT_INCLUDE_DIRS}
@@ -198,13 +197,26 @@ target_link_libraries(sdlMS PRIVATE freetype)
 target_link_libraries(sdlMS PRIVATE EnTT)
 
 if(NOT EMSCRIPTEN)
+    # 链接 FFmpeg 库（通过 pkg-config 或手动查找得到）
     target_link_libraries(sdlMS PRIVATE ${FFMPEG_LIBRARIES})
+
+    # 显式链接 Brotli 公共库（用于静态构建，解决符号缺失）
+    # 如果使用 vcpkg 工具链，可以通过 find_package 找到 Brotli 目标
+    find_package(Brotli CONFIG QUIET)
+    if(Brotli_FOUND)
+        target_link_libraries(sdlMS PRIVATE Brotli::brotlicommon)
+        message(STATUS "Found Brotli via CMake config")
+    else()
+        # 回退到 pkg-config 查找 libbrotlicommon
+        pkg_check_modules(BROTLI REQUIRED libbrotlicommon)
+        target_link_libraries(sdlMS PRIVATE ${BROTLI_LIBRARIES})
+        message(STATUS "Found Brotli via pkg-config")
+    endif()
 endif()
 
 if(WIN32)
         if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
                 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /utf-8")
-                # add_definitions(-DNOMINMAX)  # 已移至上面的 target_compile_definitions
         endif()
 
         set_target_properties(sdlMS PROPERTIES

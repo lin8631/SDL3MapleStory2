@@ -45,8 +45,8 @@ jobs:
         with:
           name: sdlMS-web
           path: |
-            build/sdlms/sdlMS.html
-            build/sdlms/sdlMS.js
-            build/sdlms/sdlMS.wasm
-            build/sdlms/sdlMS.data
-          if-no-files-found: warn
+            build/sdlMS.html
+            build/sdlMS.js
+            build/sdlMS.wasm
+            build/sdlMS.data
+          if-no-files-found: error  # 改为 error 以便及时发现文件缺失

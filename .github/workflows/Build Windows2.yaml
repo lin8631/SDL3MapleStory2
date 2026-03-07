@@ -1,4 +1,4 @@
-name: Build Windows（Clang 19 + Ninja）
+name: Build Windows（Clang 19 + Ninja）（静态库）
 
 on: [push, pull_request]
 

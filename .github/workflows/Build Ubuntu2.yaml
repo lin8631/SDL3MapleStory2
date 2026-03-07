@@ -1,4 +1,4 @@
-name: Build Ubuntu (gcc)
+name: Build Ubuntu (gcc)（静态库）
 
 on:
   push:

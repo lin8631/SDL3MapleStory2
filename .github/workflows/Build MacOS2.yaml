@@ -21,23 +21,26 @@ jobs:
           ./vcpkg/bootstrap-vcpkg.sh
           echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
 
-      # 安装静态依赖（FFmpeg 和 FreeType），并确保 arm64 架构
+      # 安装静态依赖（强制静态链接）
       - name: Install static dependencies via vcpkg
         run: |
+          export VCPKG_LIBRARY_LINKAGE=static
           $VCPKG_ROOT/vcpkg install \
-            freetype:arm64-osx-static \
-            ffmpeg:arm64-osx-static \
-            pkgconf
+            freetype:arm64-osx \
+            ffmpeg:arm64-osx \
+            pkgconf \
+            --triplet=arm64-osx
 
       - name: Clean build
         run: rm -rf build
 
-      # 配置 CMake，使用 vcpkg 工具链，指定 arm64 架构
+      # 配置 CMake，使用 vcpkg 工具链并指定 arm64 架构
       - name: Configure CMake
         run: |
           cmake -B build \
                 -DCMAKE_BUILD_TYPE=Release \
                 -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake" \
+                -DVCPKG_TARGET_TRIPLET=arm64-osx \
                 -DCMAKE_OSX_ARCHITECTURES=arm64 \
                 -S .
 

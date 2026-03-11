@@ -9,7 +9,6 @@
 #include <list>
 
 #ifndef __EMSCRIPTEN__
-// ==================== 实际实现（依赖 FFmpeg）====================
 extern "C"
 {
 #include <libavformat/avformat.h>
@@ -21,11 +20,77 @@ extern "C"
 static SDL_Mutex *sound_list_mutex = SDL_CreateMutex();
 static std::list<Sound> sound_list;
 SDL_AudioStream *audio_stream;
+SDL_AudioStream *bgm_stream;
+
+static float volume_bgm = 0.3f;
+static float volume_ui = 0.3f;
+static float volume_player_skill = 0.3f;
+static float volume_mob = 0.3f;
+
+float Sound::get_volume(SoundType type)
+{
+    switch (type)
+    {
+    case SoundType::BGM:
+        return volume_bgm;
+    case SoundType::UI:
+        return volume_ui;
+    case SoundType::PLAYER_SKILL:
+        return volume_player_skill;
+    case SoundType::MOB:
+        return volume_mob;
+    default:
+        return 1.0f;
+    }
+}
+
+void Sound::set_volume(SoundType type, float volume)
+{
+    if (volume < 0.0f)
+        volume = 0.0f;
+    if (volume > 1.0f)
+        volume = 1.0f;
+
+    switch (type)
+    {
+    case SoundType::BGM:
+        volume_bgm = volume;
+        break;
+    case SoundType::UI:
+        volume_ui = volume;
+        break;
+    case SoundType::PLAYER_SKILL:
+        volume_player_skill = volume;
+        break;
+    case SoundType::MOB:
+        volume_mob = volume;
+        break;
+    }
+}
+
+static float get_volume_for_type(SoundType type)
+{
+    return Sound::get_volume(type);
+}
+
+static void applyVolume(Uint8 *data, int length, float volume)
+{
+    if (volume >= 1.0f)
+        return;
+
+    for (int i = 0; i < length / 2; i++)
+    {
+        int16_t sample = reinterpret_cast<int16_t *>(data)[i];
+        sample = static_cast<int16_t>(sample * volume);
+        reinterpret_cast<int16_t *>(data)[i] = sample;
+    }
+}
 
 // 混合两个音频信号
-void mixAudio(Uint8 *audio1, Uint8 *audio2, Uint8 *output, int length)
+void mixAudio(Uint8 *audio1, Uint8 *audio2, Uint8 *output, int length, float volume)
 {
-    for (int i = 0; i < length; i++)
+    applyVolume(audio2, length, volume);
+    for (int i = 0; i < length / 2; i++)
     {
         int16_t sample1 = reinterpret_cast<const int16_t *>(audio1)[i / 2];
         int16_t sample2 = reinterpret_cast<const int16_t *>(audio2)[i / 2];
@@ -56,8 +121,9 @@ static void SDLCALL FeedTheAudioStreamMore(void *userdata, SDL_AudioStream *astr
             auto souw = sou->souw;
             if (souw != nullptr)
             {
+                float volume = get_volume_for_type(sou->type);
                 auto amount = std::min((unsigned long long)additional_amount, (unsigned long long)souw->pcm_data.size() - (unsigned long long)sou->offset);
-                mixAudio(data, souw->pcm_data.data() + sou->offset, data, amount);
+                mixAudio(data, souw->pcm_data.data() + sou->offset, data, amount, volume);
                 sou->offset += amount;
                 if (sou->offset >= souw->pcm_data.size())
                 {
@@ -235,12 +301,13 @@ Sound::Sound(const std::u16string &path, int d)
     delay = Window::dt_now + d;
 }
 
-void Sound::push(Sound::Wrap *souw, int delay, int pos)
+void Sound::push(Sound::Wrap *souw, int delay, int pos, SoundType type)
 {
     SDL_LockMutex(sound_list_mutex);
     Sound sou;
     sou.delay = delay + Window::dt_now;
     sou.souw = souw;
+    sou.type = type;
     if (pos == -1)
     {
         sound_list.push_back(sou);
@@ -304,8 +371,12 @@ Sound *Sound::at(int pos)
 static SDL_Mutex *sound_list_mutex = nullptr;
 static std::list<Sound> sound_list;
 SDL_AudioStream *audio_stream = nullptr;
+SDL_AudioStream *bgm_stream = nullptr;
 
 bool Sound::init() { return true; }
+
+void Sound::set_volume(SoundType type, float volume) {}
+float Sound::get_volume(SoundType type) { return 1.0f; }
 
 Sound::Wrap *Sound::Wrap::load(wz::Node *node) { return nullptr; }
 
@@ -314,7 +385,7 @@ Sound::Wrap::Wrap(wz::Node *node) {}
 Sound::Sound(wz::Node *node, int d) {}
 Sound::Sound(const std::u16string &path, int d) {}
 
-void Sound::push(Sound::Wrap *souw, int delay, int pos) {}
+void Sound::push(Sound::Wrap *souw, int delay, int pos, SoundType type) {}
 void Sound::push(Sound sou, int pos) {}
 void Sound::remove(int pos) {}
 Sound *Sound::at(int pos) { return nullptr; }

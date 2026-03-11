@@ -5,6 +5,15 @@
 #include <unordered_set>
 
 extern SDL_AudioStream *audio_stream;
+extern SDL_AudioStream *bgm_stream;
+
+enum class SoundType
+{
+    BGM,
+    UI,
+    PLAYER_SKILL,
+    MOB
+};
 
 struct Sound
 {
@@ -19,13 +28,18 @@ struct Sound
     Sound() = default;
 
     Wrap *souw = nullptr;
-    unsigned int offset = 0; // 记录当前播放的位置
-    unsigned int delay = 0;  // 记录当前播放是否延迟,数值表示延迟时间
-    bool circulate = false;  // 当前是否循环
-    bool bgm = false;        // 当前是否bgm
+    unsigned int offset = 0;
+    unsigned int delay = 0;
+    bool circulate = false;
+    bool bgm = false;
+    SoundType type = SoundType::SFX;
 
     static bool init();
-    static void push(Wrap *wrap, int delay = 0, int pos = -1);
+
+    static void set_volume(SoundType type, float volume);
+    static float get_volume(SoundType type);
+
+    static void push(Wrap *wrap, int delay = 0, int pos = -1, SoundType type = SoundType::SFX);
     static void push(Sound sou, int pos = -1);
     static void remove(int pos);
     static Sound *at(int pos);

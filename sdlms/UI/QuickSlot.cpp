@@ -2,6 +2,21 @@
 #include "Resources/Wz.h"
 #include "Systems/UI.h"
 
+void QuickSlot::toggle()
+{
+    visible = !visible;
+}
+
+void QuickSlot::show()
+{
+    visible = true;
+}
+
+void QuickSlot::hide()
+{
+    visible = false;
+}
+
 void QuickSlot::init()
 {
     auto ui_node = Wz::UI->get_root();

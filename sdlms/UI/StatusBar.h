@@ -78,12 +78,10 @@ struct StatusBar
         {&SkillKey, SDL_FRect{706.0, -64.0, 28.0, 20.0}},
         {&KeySet, SDL_FRect{736.0, -64.0, 28.0, 20.0}},
         {&QuickSlot, SDL_FRect{766.0, -64.0, 28.0, 20.0}},
-        {&QuickSlotD, SDL_FRect{796.0, -64.0, 28.0, 20.0}},
         {&BtChatMax, SDL_FRect{536.0, -58.0, 12.0, 12.0}},
     };
 
     static void QuickSlot_func();
-    static void QuickSlotD_func();
     static void KeySet_func();
     static void InvenKey_func();
     static void SkillKey_func();
@@ -92,7 +90,6 @@ struct StatusBar
 
     static const inline std::map<std::pair<std::u16string, std::unordered_map<std::u16string, AnimatedSprite>> *, std::function<void()>> click_map = {
         {&QuickSlot, QuickSlot_func},
-        {&QuickSlotD, QuickSlotD_func},
         {&KeySet, KeySet_func},
         {&InvenKey, InvenKey_func},
         {&SkillKey, SkillKey_func},

@@ -22,11 +22,11 @@ static std::list<Sound> sound_list;
 SDL_AudioStream *audio_stream;
 SDL_AudioStream *bgm_stream;
 
-static float volume_bgm = 0.7f;
-static float volume_ui = 1.0f;
-static float volume_player_skill = 1.0f;
-static float volume_mob = 1.0f;
-static float volume_sfx = 1.0f;
+static float volume_bgm = 0.3f;
+static float volume_ui = 0.3f;
+static float volume_player_skill = 0.3f;
+static float volume_mob = 0.3f;
+static float volume_sfx = 0.3f;
 static float volume_master = 1.0f;
 
 float Sound::get_master_volume()

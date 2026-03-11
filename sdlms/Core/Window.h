@@ -18,10 +18,15 @@ struct Window
     static inline int delta_time = 0;
     static inline bool quit;
 
+    static inline unsigned int current_width = 800;
+    static inline unsigned int current_height = 600;
+
     static void create_window(const char *title, unsigned int width, unsigned int height);
 
     static void tick_delta_time();
 
     static void clear();
     static void update();
+
+    static void toggle_resolution();
 };

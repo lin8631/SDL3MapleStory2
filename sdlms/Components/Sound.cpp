@@ -22,10 +22,26 @@ static std::list<Sound> sound_list;
 SDL_AudioStream *audio_stream;
 SDL_AudioStream *bgm_stream;
 
-static float volume_bgm = 0.3f;
-static float volume_ui = 0.3f;
-static float volume_player_skill = 0.3f;
-static float volume_mob = 0.3f;
+static float volume_bgm = 0.7f;
+static float volume_ui = 1.0f;
+static float volume_player_skill = 1.0f;
+static float volume_mob = 1.0f;
+static float volume_sfx = 1.0f;
+static float volume_master = 1.0f;
+
+float Sound::get_master_volume()
+{
+    return volume_master;
+}
+
+void Sound::set_master_volume(float volume)
+{
+    if (volume < 0.0f)
+        volume = 0.0f;
+    if (volume > 1.0f)
+        volume = 1.0f;
+    volume_master = volume;
+}
 
 float Sound::get_volume(SoundType type)
 {
@@ -39,6 +55,8 @@ float Sound::get_volume(SoundType type)
         return volume_player_skill;
     case SoundType::MOB:
         return volume_mob;
+    case SoundType::SFX:
+        return volume_sfx;
     default:
         return 1.0f;
     }
@@ -65,12 +83,15 @@ void Sound::set_volume(SoundType type, float volume)
     case SoundType::MOB:
         volume_mob = volume;
         break;
+    case SoundType::SFX:
+        volume_sfx = volume;
+        break;
     }
 }
 
 static float get_volume_for_type(SoundType type)
 {
-    return Sound::get_volume(type);
+    return Sound::get_volume(type) * volume_master;
 }
 
 static void applyVolume(Uint8 *data, int length, float volume)
@@ -377,6 +398,9 @@ bool Sound::init() { return true; }
 
 void Sound::set_volume(SoundType type, float volume) {}
 float Sound::get_volume(SoundType type) { return 1.0f; }
+
+void Sound::set_master_volume(float volume) {}
+float Sound::get_master_volume() { return 1.0f; }
 
 Sound::Wrap *Sound::Wrap::load(wz::Node *node) { return nullptr; }
 

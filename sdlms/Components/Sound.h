@@ -12,7 +12,8 @@ enum class SoundType
     BGM,
     UI,
     PLAYER_SKILL,
-    MOB
+    MOB,
+    SFX
 };
 
 struct Sound
@@ -38,6 +39,9 @@ struct Sound
 
     static void set_volume(SoundType type, float volume);
     static float get_volume(SoundType type);
+
+    static void set_master_volume(float volume);
+    static float get_master_volume();
 
     static void push(Wrap *wrap, int delay = 0, int pos = -1, SoundType type = SoundType::SFX);
     static void push(Sound sou, int pos = -1);

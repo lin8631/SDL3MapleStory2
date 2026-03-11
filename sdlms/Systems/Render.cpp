@@ -3,6 +3,7 @@
 #include "Commons/Commons.h"
 #include "Core/Core.h"
 #include "Systems/UI.h"
+#include "UI/QuickSlot.h"
 #include <SDL3/SDL.h>
 #include <math.h>
 #include <variant>
@@ -869,9 +870,21 @@ void render_statusbar()
     // 渲染按钮
     for (auto &[key, val] : StatusBar::position_map)
     {
-        auto aspr = key->second.at(key->first);
-        auto position = SDL_FPoint{(float)val.x + aspr.asprw->sprites[aspr.anim_index]->origin.x, (float)Camera::h + val.y + aspr.asprw->sprites[aspr.anim_index]->origin.y};
-        render_animated_sprite(position, &aspr, StatusBar::alpha);
+        std::pair<std::u16string, std::unordered_map<std::u16string, AnimatedSprite>> *button_ptr = key;
+        if (button_ptr == &StatusBar::QuickSlot)
+        {
+            auto &sprite_map = QuickSlot::visible ? StatusBar::QuickSlotD.second : StatusBar::QuickSlot.second;
+            auto sprite_name = QuickSlot::visible ? StatusBar::QuickSlotD.first : StatusBar::QuickSlot.first;
+            auto aspr = sprite_map.at(sprite_name);
+            auto position = SDL_FPoint{(float)val.x + aspr.asprw->sprites[aspr.anim_index]->origin.x, (float)Camera::h + val.y + aspr.asprw->sprites[aspr.anim_index]->origin.y};
+            render_animated_sprite(position, &aspr, StatusBar::alpha);
+        }
+        else
+        {
+            auto aspr = key->second.at(key->first);
+            auto position = SDL_FPoint{(float)val.x + aspr.asprw->sprites[aspr.anim_index]->origin.x, (float)Camera::h + val.y + aspr.asprw->sprites[aspr.anim_index]->origin.y};
+            render_animated_sprite(position, &aspr, StatusBar::alpha);
+        }
     }
     // 聊天栏
     if (!StatusBar::chatOpen)
@@ -1089,7 +1102,10 @@ void render_gaintip()
 
 void render_quickslot()
 {
-    // 渲染技能栏
+    if (!QuickSlot::visible)
+    {
+        return;
+    }
     SDL_FRect pos_rect{(float)QuickSlot::x, (float)QuickSlot::y, (float)QuickSlot::w, (float)QuickSlot::h};
     render_texture(QuickSlot::backgrnd2, nullptr, &pos_rect, QuickSlot::alpha);
 }

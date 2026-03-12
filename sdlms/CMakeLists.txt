@@ -195,26 +195,35 @@ if(NOT EMSCRIPTEN)
     # 链接 FFmpeg 库（通过 pkg-config 或手动查找得到）
     target_link_libraries(sdlMS PRIVATE ${FFMPEG_LIBRARIES})
 
-    # 链接 Brotli 静态库（所有平台）
-    # 优先使用 vcpkg 提供的 CMake 配置文件
-    find_package(Brotli CONFIG QUIET)
-    if(Brotli_FOUND)
-        target_link_libraries(sdlMS PRIVATE Brotli::brotlicommon Brotli::brotlidec Brotli::brotlienc)
-        message(STATUS "Found Brotli via CMake config")
-    else()
-        # 保存当前后缀，并优先查找静态库
-        set(_orig_suffixes ${CMAKE_FIND_LIBRARY_SUFFIXES})
-        set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
-        find_library(BROTLI_COMMON_LIB NAMES brotlicommon)
-        find_library(BROTLI_DEC_LIB    NAMES brotlidec)
-        find_library(BROTLI_ENC_LIB    NAMES brotlienc)
-        # 恢复后缀
-        set(CMAKE_FIND_LIBRARY_SUFFIXES ${_orig_suffixes})
-        if(BROTLI_COMMON_LIB AND BROTLI_DEC_LIB AND BROTLI_ENC_LIB)
-            target_link_libraries(sdlMS PRIVATE ${BROTLI_COMMON_LIB} ${BROTLI_DEC_LIB} ${BROTLI_ENC_LIB})
-            message(STATUS "Found Brotli static libraries via find_library")
+    # 判断是否需要静态链接 Brotli
+    set(NEED_STATIC_BROTLI FALSE)
+    if(APPLE)
+        set(NEED_STATIC_BROTLI TRUE)
+    elseif(DEFINED ENV{VCPKG_LIBRARY_LINKAGE} AND "$ENV{VCPKG_LIBRARY_LINKAGE}" STREQUAL "static")
+        set(NEED_STATIC_BROTLI TRUE)
+    endif()
+
+    if(NEED_STATIC_BROTLI)
+        # 优先使用 vcpkg 提供的 CMake 配置文件
+        find_package(Brotli CONFIG QUIET)
+        if(Brotli_FOUND)
+            target_link_libraries(sdlMS PRIVATE Brotli::brotlicommon Brotli::brotlidec Brotli::brotlienc)
+            message(STATUS "Found Brotli via CMake config")
         else()
-            message(FATAL_ERROR "Brotli libraries not found. Please ensure brotli is installed via vcpkg.")
+            # 保存当前后缀，并优先查找静态库
+            set(_orig_suffixes ${CMAKE_FIND_LIBRARY_SUFFIXES})
+            set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
+            find_library(BROTLI_COMMON_LIB NAMES brotlicommon)
+            find_library(BROTLI_DEC_LIB    NAMES brotlidec)
+            find_library(BROTLI_ENC_LIB    NAMES brotlienc)
+            # 恢复后缀
+            set(CMAKE_FIND_LIBRARY_SUFFIXES ${_orig_suffixes})
+            if(BROTLI_COMMON_LIB AND BROTLI_DEC_LIB AND BROTLI_ENC_LIB)
+                target_link_libraries(sdlMS PRIVATE ${BROTLI_COMMON_LIB} ${BROTLI_DEC_LIB} ${BROTLI_ENC_LIB})
+                message(STATUS "Found Brotli static libraries via find_library")
+            else()
+                message(FATAL_ERROR "Brotli libraries not found for static linking. Please ensure brotli is installed via vcpkg with static linkage.")
+            endif()
         endif()
     endif()
 endif()

@@ -1,6 +1,11 @@
 name: Build Windows（Clang 19 + Ninja）
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:   # 允许手动触发
 
 jobs:
   build:
@@ -33,6 +38,15 @@ jobs:
           .\vcpkg\bootstrap-vcpkg.bat
           .\vcpkg\vcpkg install ffmpeg:x64-windows
 
+      # 安装 pkg-config（Windows 使用 pkgconfiglite）
+      - name: Install pkg-config
+        run: choco install pkgconfiglite
+
+      # 设置 PKG_CONFIG_PATH，使 pkg-config 能找到 vcpkg 安装的 .pc 文件
+      - name: Set PKG_CONFIG_PATH
+        run: echo "PKG_CONFIG_PATH=$env:VCPKG_ROOT\installed\x64-windows\lib\pkgconfig" >> $env:GITHUB_ENV
+        shell: pwsh
+
       - name: Configure CMake
         run: |
           mkdir build
@@ -46,21 +60,19 @@ jobs:
       - name: Build
         run: ninja -C build
 
-      # 复制 FFmpeg DLL 到输出目录
+      # 复制 FFmpeg DLL 到输出目录（Windows 为动态链接，需要复制 DLL）
       - name: Copy FFmpeg DLLs
         run: |
           $vcpkgBin = "${{ github.workspace }}\vcpkg\installed\x64-windows\bin"
           $outputDir = "${{ github.workspace }}\build"
-          # 复制所有 FFmpeg 相关的 DLL（可根据实际需要调整模式）
           Copy-Item -Path "$vcpkgBin\avcodec-*.dll" -Destination $outputDir
           Copy-Item -Path "$vcpkgBin\avformat-*.dll" -Destination $outputDir
           Copy-Item -Path "$vcpkgBin\avutil-*.dll" -Destination $outputDir
           Copy-Item -Path "$vcpkgBin\swscale-*.dll" -Destination $outputDir
           Copy-Item -Path "$vcpkgBin\swresample-*.dll" -Destination $outputDir
-          # 可选：如果还有其他依赖（如 zlib、SDL 等）也需要复制，但 SDL 已静态链接，zlib 可能静态链接，暂不处理
           Write-Host "FFmpeg DLLs copied to build directory"
 
-      # 不上传整个 build 目录（只包含 exe 和 DLL）
+      # 上传 artifacts（exe 和 FFmpeg DLL）
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

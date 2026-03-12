@@ -16,175 +16,47 @@ include_directories("${CMAKE_SOURCE_DIR}/Game/wzlibcpp/mio/include")
 
 # 查找 FFmpeg 组件（非 Emscripten 平台）
 if(NOT EMSCRIPTEN)
-    # 尝试使用 pkg-config 查找 FFmpeg
-    find_package(PkgConfig QUIET)
-    if(PKG_CONFIG_FOUND)
-        pkg_check_modules(PC_AVFORMAT QUIET libavformat)
-        pkg_check_modules(PC_AVCODEC  QUIET libavcodec)
-        pkg_check_modules(PC_AVUTIL   QUIET libavutil)
-        pkg_check_modules(PC_SWSCALE  QUIET libswscale)
-        pkg_check_modules(PC_SWRESAMPLE QUIET libswresample)
-
-        if(PC_AVFORMAT_FOUND AND PC_AVCODEC_FOUND AND PC_AVUTIL_FOUND AND PC_SWSCALE_FOUND AND PC_SWRESAMPLE_FOUND)
-            message(STATUS "Found FFmpeg via pkg-config")
-            set(FFMPEG_INCLUDE_DIRS
-                ${PC_AVFORMAT_INCLUDE_DIRS}
-                ${PC_AVCODEC_INCLUDE_DIRS}
-                ${PC_AVUTIL_INCLUDE_DIRS}
-                ${PC_SWSCALE_INCLUDE_DIRS}
-                ${PC_SWRESAMPLE_INCLUDE_DIRS}
-            )
-            list(REMOVE_DUPLICATES FFMPEG_INCLUDE_DIRS)
-            include_directories(${FFMPEG_INCLUDE_DIRS})
-
-            # 判断是否需要静态链接（使用环境变量或平台判断）
-            set(NEED_STATIC_BROTLI FALSE)
-            if(APPLE)
-                set(NEED_STATIC_BROTLI TRUE)
-            elseif(DEFINED ENV{VCPKG_LIBRARY_LINKAGE} AND "$ENV{VCPKG_LIBRARY_LINKAGE}" STREQUAL "static")
-                set(NEED_STATIC_BROTLI TRUE)
-            endif()
-
-            if(NEED_STATIC_BROTLI)
-                # 静态链接：使用包含私有依赖的库列表
-                set(FFMPEG_LIBRARIES
-                    ${PC_AVFORMAT_STATIC_LIBRARIES}
-                    ${PC_AVCODEC_STATIC_LIBRARIES}
-                    ${PC_AVUTIL_STATIC_LIBRARIES}
-                    ${PC_SWSCALE_STATIC_LIBRARIES}
-                    ${PC_SWRESAMPLE_STATIC_LIBRARIES}
-                )
-                message(STATUS "Using FFmpeg static libraries with private dependencies")
-            else()
-                # 动态链接：使用普通库列表
-                set(FFMPEG_LIBRARIES
-                    ${PC_AVFORMAT_LIBRARIES}
-                    ${PC_AVCODEC_LIBRARIES}
-                    ${PC_AVUTIL_LIBRARIES}
-                    ${PC_SWSCALE_LIBRARIES}
-                    ${PC_SWRESAMPLE_LIBRARIES}
-                )
-            endif()
-
-            set(FFMPEG_LIBRARY_DIRS
-                ${PC_AVFORMAT_LIBRARY_DIRS}
-                ${PC_AVCODEC_LIBRARY_DIRS}
-                ${PC_AVUTIL_LIBRARY_DIRS}
-                ${PC_SWSCALE_LIBRARY_DIRS}
-                ${PC_SWRESAMPLE_LIBRARY_DIRS}
-            )
-            list(REMOVE_DUPLICATES FFMPEG_LIBRARY_DIRS)
-            link_directories(${FFMPEG_LIBRARY_DIRS})
-        else()
-            message(STATUS "pkg-config failed to find all FFmpeg components, falling back to manual search")
-            set(PKGCONFIG_FAILED TRUE)
-        endif()
-    else()
-        message(STATUS "pkg-config not found, falling back to manual search")
-        set(PKGCONFIG_FAILED TRUE)
+    # 判断是否需要静态链接（macOS 或 vcpkg 静态构建）
+    set(NEED_STATIC_FFMPEG FALSE)
+    if(APPLE)
+        set(NEED_STATIC_FFMPEG TRUE)
+    elseif(DEFINED ENV{VCPKG_LIBRARY_LINKAGE} AND "$ENV{VCPKG_LIBRARY_LINKAGE}" STREQUAL "static")
+        set(NEED_STATIC_FFMPEG TRUE)
     endif()
 
-    if(PKGCONFIG_FAILED)
-        # 允许用户通过 FFMPEG_ROOT 变量指定 FFmpeg 安装根目录
-        if(NOT DEFINED FFMPEG_ROOT)
-            set(FFMPEG_ROOT "" CACHE PATH "Path to FFmpeg installation (containing include/ and lib/)")
-        endif()
+    if(NEED_STATIC_FFMPEG)
+        # 告诉 pkg-config 使用静态库（包含私有依赖）
+        set(ENV{PKG_CONFIG_ARGN} "--static")
+        message(STATUS "pkg-config will use static libraries (PKG_CONFIG_ARGN=--static)")
+    endif()
 
-        # 定义 FFmpeg 各组件的头文件和库文件名
-        set(FFMPEG_COMPONENTS avformat avcodec avutil swscale swresample)
-        set(FFMPEG_POSSIBLE_INCLUDE_SUFFIXES include include/ffmpeg)
-        set(FFMPEG_POSSIBLE_LIB_SUFFIXES lib lib64)
+    # 使用 pkg-config 查找 FFmpeg 组件并创建导入目标
+    find_package(PkgConfig REQUIRED)
 
-        if(WIN32)
-            set(FFMPEG_POSSIBLE_BASE_PATHS
-                "C:/vcpkg/installed/x64-windows"
-                "C:/msys64/mingw64"
-                "C:/Program Files/FFmpeg"
-                "C:/FFmpeg"
-                "$ENV{FFMPEG_ROOT}"
-            )
-        elseif(APPLE)
-            set(FFMPEG_POSSIBLE_BASE_PATHS
-                "/usr/local"
-                "/opt/homebrew"
-                "/opt/local"
-                "/usr"
-            )
-        else() # Linux/Unix
-            set(FFMPEG_POSSIBLE_BASE_PATHS
-                "/usr/local"
-                "/usr"
-                "/opt/ffmpeg"
-            )
-        endif()
+    set(FFMPEG_COMPONENTS libavformat libavcodec libavutil libswscale libswresample)
+    set(FFMPEG_TARGETS "")
 
-        if(FFMPEG_ROOT)
-            list(INSERT FFMPEG_POSSIBLE_BASE_PATHS 0 ${FFMPEG_ROOT})
-        endif()
-
-        # 循环查找每个组件的头文件和库
-        foreach(COMP ${FFMPEG_COMPONENTS})
-            string(TOUPPER ${COMP} COMP_UPPER)
-
-            find_path(FFMPEG_${COMP_UPPER}_INCLUDE_DIR
-                NAMES lib${COMP}/${COMP}.h
-                PATHS ${FFMPEG_POSSIBLE_BASE_PATHS}
-                PATH_SUFFIXES ${FFMPEG_POSSIBLE_INCLUDE_SUFFIXES}
-                NO_DEFAULT_PATH
-            )
-
-            find_library(FFMPEG_${COMP_UPPER}_LIBRARY
-                NAMES ${COMP}
-                PATHS ${FFMPEG_POSSIBLE_BASE_PATHS}
-                PATH_SUFFIXES ${FFMPEG_POSSIBLE_LIB_SUFFIXES}
-                NO_DEFAULT_PATH
-            )
-
-            if(FFMPEG_${COMP_UPPER}_INCLUDE_DIR AND FFMPEG_${COMP_UPPER}_LIBRARY)
-                set(FFMPEG_${COMP_UPPER}_FOUND TRUE)
-                list(APPEND FFMPEG_INCLUDE_DIRS ${FFMPEG_${COMP_UPPER}_INCLUDE_DIR})
-                list(APPEND FFMPEG_LIBRARIES ${FFMPEG_${COMP_UPPER}_LIBRARY})
-            else()
-                set(FFMPEG_${COMP_UPPER}_FOUND FALSE)
-                message(STATUS "FFmpeg component ${COMP} not found in default paths.")
-            endif()
-        endforeach()
-
-        # 检查是否所有必需组件都找到
-        set(REQUIRED_COMPONENTS avformat avcodec avutil swscale swresample)
-        set(ALL_FOUND TRUE)
-        foreach(COMP ${REQUIRED_COMPONENTS})
-            string(TOUPPER ${COMP} COMP_UPPER)
-            if(NOT FFMPEG_${COMP_UPPER}_FOUND)
-                set(ALL_FOUND FALSE)
-                break()
-            endif()
-        endforeach()
-
-        if(NOT ALL_FOUND)
-            if(WIN32)
-                message(STATUS "FFmpeg not found in standard paths, trying hardcoded Windows path")
-                # 硬编码路径（根据用户要求）
-                set(HARDCODED_FFMPEG_PATH "C:/ffmpeg-master-latest-win64-gpl-shared")
-                if(EXISTS "${HARDCODED_FFMPEG_PATH}/include" AND EXISTS "${HARDCODED_FFMPEG_PATH}/lib")
-                    include_directories("${HARDCODED_FFMPEG_PATH}/include")
-                    link_directories("${HARDCODED_FFMPEG_PATH}/lib")
-                    set(FFMPEG_LIBRARIES avformat avcodec avutil swscale swresample)
-                    message(STATUS "Using hardcoded FFmpeg path: ${HARDCODED_FFMPEG_PATH}")
-                else()
-                    message(FATAL_ERROR "Required FFmpeg components not found. Please install FFmpeg or set FFMPEG_ROOT to the correct path.")
-                endif()
-            else()
-                message(FATAL_ERROR "Required FFmpeg components not found. Please install FFmpeg or set FFMPEG_ROOT to the correct path.")
-            endif()
+    foreach(COMP IN LISTS FFMPEG_COMPONENTS)
+        string(REPLACE "lib" "" COMP_SHORT ${COMP})  # 去掉 lib 前缀得到 avformat 等
+        pkg_check_modules(PC_${COMP_SHORT} IMPORTED_TARGET ${COMP})
+        if(PC_${COMP_SHORT}_FOUND)
+            list(APPEND FFMPEG_TARGETS PkgConfig::${COMP_SHORT})
+            message(STATUS "Found ${COMP} via pkg-config")
         else()
-            list(REMOVE_DUPLICATES FFMPEG_INCLUDE_DIRS)
-            list(REMOVE_DUPLICATES FFMPEG_LIBRARIES)
-            include_directories(${FFMPEG_INCLUDE_DIRS})
+            message(STATUS "pkg-config could not find ${COMP}")
         endif()
+    endforeach()
+
+    list(LENGTH FFMPEG_TARGETS NUM_TARGETS)
+    if(NUM_TARGETS EQUAL 5)
+        # 所有组件都找到，使用导入目标链接
+        set(FFMPEG_LINK_LIBRARIES ${FFMPEG_TARGETS})
+    else()
+        message(FATAL_ERROR "FFmpeg components not found via pkg-config. Please ensure vcpkg installed them correctly.")
     endif()
 endif()
 
+# 处理 Emscripten 平台（保持不变）
 if(EMSCRIPTEN)
     if(DEFINED ENV{FFMPEG_ROOT})
         set(FFMPEG_ROOT $ENV{FFMPEG_ROOT})
@@ -199,7 +71,7 @@ file(GLOB SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/**/*.cpp)
 
 add_executable(sdlMS ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp ${SOURCE_FILES})
 
-# 为 Windows 平台添加 NOMINMAX 定义，防止 min/max 宏与 std::min/std::max 冲突
+# Windows NOMINMAX
 if(WIN32)
     target_compile_definitions(sdlMS PRIVATE NOMINMAX)
 endif()
@@ -210,10 +82,29 @@ target_link_libraries(sdlMS PRIVATE freetype)
 target_link_libraries(sdlMS PRIVATE EnTT)
 
 if(NOT EMSCRIPTEN)
-    # 链接 FFmpeg 库（通过 pkg-config 或手动查找得到）
-    target_link_libraries(sdlMS PRIVATE ${FFMPEG_LIBRARIES})
+    # 链接 FFmpeg 导入目标（自动处理私有依赖和系统框架）
+    if(FFMPEG_LINK_LIBRARIES)
+        target_link_libraries(sdlMS PRIVATE ${FFMPEG_LINK_LIBRARIES})
+    else()
+        # 回退到手动库列表（理论上不会执行到这里，但保留以防万一）
+        target_link_libraries(sdlMS PRIVATE ${FFMPEG_LIBRARIES})
+        if(APPLE)
+            find_library(VIDEOTOOLBOX_FRAMEWORK VideoToolbox)
+            if(VIDEOTOOLBOX_FRAMEWORK)
+                target_link_libraries(sdlMS PRIVATE ${VIDEOTOOLBOX_FRAMEWORK})
+            endif()
+            find_library(COREMEDIA_FRAMEWORK CoreMedia)
+            if(COREMEDIA_FRAMEWORK)
+                target_link_libraries(sdlMS PRIVATE ${COREMEDIA_FRAMEWORK})
+            endif()
+            find_library(COREFOUNDATION_FRAMEWORK CoreFoundation)
+            if(COREFOUNDATION_FRAMEWORK)
+                target_link_libraries(sdlMS PRIVATE ${COREFOUNDATION_FRAMEWORK})
+            endif()
+        endif()
+    endif()
 
-    # 判断是否需要静态链接 Brotli（用于 macOS 或 vcpkg 静态构建）
+    # Brotli 链接（如果需要）
     set(NEED_STATIC_BROTLI FALSE)
     if(APPLE)
         set(NEED_STATIC_BROTLI TRUE)
@@ -222,14 +113,12 @@ if(NOT EMSCRIPTEN)
     endif()
 
     if(NEED_STATIC_BROTLI)
-        # 优先使用 vcpkg 提供的 CMake 配置文件
         find_package(Brotli CONFIG QUIET)
         if(Brotli_FOUND)
             target_link_libraries(sdlMS PRIVATE Brotli::brotlicommon Brotli::brotlidec Brotli::brotlienc)
             message(STATUS "Found Brotli via CMake config")
         else()
             message(STATUS "Brotli CMake config not found, using direct path from vcpkg")
-            # 使用 vcpkg 变量直接构造静态库路径
             if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
                 set(VCPKG_LIB_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib")
                 set(BROTLI_COMMON_LIB "${VCPKG_LIB_DIR}/libbrotlicommon.a")
@@ -237,7 +126,6 @@ if(NOT EMSCRIPTEN)
                 set(BROTLI_ENC_LIB    "${VCPKG_LIB_DIR}/libbrotlienc.a")
                 if(EXISTS "${BROTLI_COMMON_LIB}" AND EXISTS "${BROTLI_DEC_LIB}" AND EXISTS "${BROTLI_ENC_LIB}")
                     if(APPLE)
-                        # macOS 使用 -force_load 替代 --whole-archive
                         target_link_libraries(sdlMS PRIVATE
                             -Wl,-force_load,${BROTLI_COMMON_LIB}
                             -Wl,-force_load,${BROTLI_DEC_LIB}
@@ -245,7 +133,6 @@ if(NOT EMSCRIPTEN)
                         )
                         message(STATUS "Using Brotli static libraries from vcpkg with -force_load on macOS")
                     else()
-                        # Linux/其他使用 --whole-archive
                         target_link_libraries(sdlMS PRIVATE
                             -Wl,--whole-archive
                             ${BROTLI_COMMON_LIB}
@@ -266,37 +153,30 @@ if(NOT EMSCRIPTEN)
 endif()
 
 if(WIN32)
-        if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-                set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /utf-8")
-        endif()
-
-        set_target_properties(sdlMS PROPERTIES
-                RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /utf-8")
+    endif()
+    set_target_properties(sdlMS PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 endif()
 
 if(APPLE)
-        set_target_properties(sdlMS PROPERTIES
-                RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-        )
+    set_target_properties(sdlMS PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 endif()
 
-# 设置 Emscripten 编译选项
+# Emscripten 设置
 if(EMSCRIPTEN)
-        set(CMAKE_EXECUTABLE_SUFFIX ".html")
-
-        if(EXISTS "${CMAKE_BINARY_DIR}/Font/@Font")
-                set_target_properties(sdlMS PROPERTIES LINK_FLAGS "--preload-file ${CMAKE_BINARY_DIR}/Font/@Font/")
-        endif()
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sALLOW_MEMORY_GROWTH -sUSE_ZLIB -sSTACK_SIZE=32MB")
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sINITIAL_MEMORY=64MB")
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sFETCH=1")
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sASYNCIFY=1")
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sMAXIMUM_MEMORY=4GB")
-
-        # set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -g4 -sNO_DISABLE_EXCEPTION_CATCHING=1")
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -O3 -flto")
-
-        set_target_properties(sdlMS PROPERTIES
-                RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
-        )
+    set(CMAKE_EXECUTABLE_SUFFIX ".html")
+    if(EXISTS "${CMAKE_BINARY_DIR}/Font/@Font")
+        set_target_properties(sdlMS PROPERTIES LINK_FLAGS "--preload-file ${CMAKE_BINARY_DIR}/Font/@Font/")
+    endif()
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sALLOW_MEMORY_GROWTH -sUSE_ZLIB -sSTACK_SIZE=32MB")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sINITIAL_MEMORY=64MB")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sFETCH=1")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sASYNCIFY=1")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sMAXIMUM_MEMORY=4GB")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -O3 -flto")
+    set_target_properties(sdlMS PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 endif()

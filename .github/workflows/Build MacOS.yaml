@@ -5,6 +5,7 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:   # 允许手动触发
 
 jobs:
   macos:
@@ -21,15 +22,23 @@ jobs:
           ./vcpkg/bootstrap-vcpkg.sh
           echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
 
-      # 更新 vcpkg 端口文件（确保 freetype 等包的下载 URL 正确）
+      # 更新 vcpkg 端口文件
       - name: Update vcpkg ports
         run: $VCPKG_ROOT/vcpkg update
 
-      # 安装静态依赖（使用 arm64-osx 三元组，通过环境变量强制静态）
+      # 安装静态依赖（使用 arm64-osx 三元组，强制静态）
       - name: Install static dependencies via vcpkg
         run: |
           export VCPKG_LIBRARY_LINKAGE=static
           $VCPKG_ROOT/vcpkg install freetype ffmpeg pkgconf --triplet=arm64-osx
+
+      # 安装 pkg-config（Homebrew）
+      - name: Install pkg-config
+        run: brew install pkg-config
+
+      # 设置 PKG_CONFIG_PATH，使 pkg-config 能找到 vcpkg 安装的 .pc 文件
+      - name: Set PKG_CONFIG_PATH
+        run: echo "PKG_CONFIG_PATH=$VCPKG_ROOT/installed/arm64-osx/lib/pkgconfig" >> $GITHUB_ENV
 
       - name: Clean build
         run: rm -rf build

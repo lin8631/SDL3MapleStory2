@@ -1,11 +1,11 @@
-name: Build Windows（Clang 19 + Ninja）
+name: Build Windows (Clang 19 + Ninja, Static)
 
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-  workflow_dispatch:   # 允许手动触发
+  workflow_dispatch:
 
 jobs:
   build:
@@ -32,19 +32,18 @@ jobs:
           choco install cmake --version=3.28.3
           choco install ninja
 
-      - name: Install vcpkg and FFmpeg
+      - name: Install vcpkg and dependencies (static)
         run: |
           git clone https://github.com/Microsoft/vcpkg.git
           .\vcpkg\bootstrap-vcpkg.bat
-          .\vcpkg\vcpkg install ffmpeg:x64-windows
+          # 使用静态三元组，安装所有必需依赖
+          .\vcpkg\vcpkg install freetype ffmpeg pkgconf --triplet=x64-windows-static
 
-      # 安装 pkg-config（Windows 使用 pkgconfiglite）
       - name: Install pkg-config
         run: choco install pkgconfiglite
 
-      # 设置 PKG_CONFIG_PATH，使 pkg-config 能找到 vcpkg 安装的 .pc 文件
       - name: Set PKG_CONFIG_PATH
-        run: echo "PKG_CONFIG_PATH=$env:VCPKG_ROOT\installed\x64-windows\lib\pkgconfig" >> $env:GITHUB_ENV
+        run: echo "PKG_CONFIG_PATH=$env:VCPKG_ROOT\installed\x64-windows-static\lib\pkgconfig" >> $env:GITHUB_ENV
         shell: pwsh
 
       - name: Configure CMake
@@ -55,33 +54,16 @@ jobs:
             -DCMAKE_C_COMPILER=clang `
             -DCMAKE_CXX_COMPILER=clang++ `
             -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake"
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static
 
       - name: Build
         run: ninja -C build
 
-      # 复制 FFmpeg DLL 到输出目录（Windows 为动态链接，需要复制 DLL）
-      - name: Copy FFmpeg DLLs
-        run: |
-          $vcpkgBin = "${{ github.workspace }}\vcpkg\installed\x64-windows\bin"
-          $outputDir = "${{ github.workspace }}\build"
-          Copy-Item -Path "$vcpkgBin\avcodec-*.dll" -Destination $outputDir
-          Copy-Item -Path "$vcpkgBin\avformat-*.dll" -Destination $outputDir
-          Copy-Item -Path "$vcpkgBin\avutil-*.dll" -Destination $outputDir
-          Copy-Item -Path "$vcpkgBin\swscale-*.dll" -Destination $outputDir
-          Copy-Item -Path "$vcpkgBin\swresample-*.dll" -Destination $outputDir
-          Write-Host "FFmpeg DLLs copied to build directory"
-
-      # 上传 artifacts（exe 和 FFmpeg DLL）
-      - name: Upload artifacts
+      # 不再复制 DLL，直接上传 exe
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sdlMS-windows
-          path: |
-            build/sdlMS.exe
-            build/avcodec-*.dll
-            build/avformat-*.dll
-            build/avutil-*.dll
-            build/swscale-*.dll
-            build/swresample-*.dll
+          name: sdlMS-windows-static
+          path: build/sdlMS.exe
           if-no-files-found: error

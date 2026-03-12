@@ -38,8 +38,8 @@ if(NOT EMSCRIPTEN)
 
     foreach(COMP IN LISTS FFMPEG_COMPONENTS)
         string(REPLACE "lib" "" COMP_SHORT ${COMP})  # 去掉 lib 前缀得到 avformat 等
-        pkg_check_modules(PC_${COMP_SHORT} IMPORTED_TARGET ${COMP})
-        if(PC_${COMP_SHORT}_FOUND)
+        pkg_check_modules(${COMP_SHORT} IMPORTED_TARGET ${COMP})   # 目标名：PkgConfig::${COMP_SHORT}
+        if(${COMP_SHORT}_FOUND)
             list(APPEND FFMPEG_TARGETS PkgConfig::${COMP_SHORT})
             message(STATUS "Found ${COMP} via pkg-config")
         else()

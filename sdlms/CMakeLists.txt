@@ -210,16 +210,23 @@ if(NOT EMSCRIPTEN)
             target_link_libraries(sdlMS PRIVATE Brotli::brotlicommon Brotli::brotlidec Brotli::brotlienc)
             message(STATUS "Found Brotli via CMake config")
         else()
-            message(STATUS "Brotli CMake config not found, trying direct path from vcpkg")
-            # 使用 vcpkg 工具链提供的变量直接构造静态库路径
+            message(STATUS "Brotli CMake config not found, using direct path from vcpkg")
+            # 使用 vcpkg 变量直接构造静态库路径
             if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
                 set(VCPKG_LIB_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib")
                 set(BROTLI_COMMON_LIB "${VCPKG_LIB_DIR}/libbrotlicommon.a")
                 set(BROTLI_DEC_LIB    "${VCPKG_LIB_DIR}/libbrotlidec.a")
                 set(BROTLI_ENC_LIB    "${VCPKG_LIB_DIR}/libbrotlienc.a")
                 if(EXISTS "${BROTLI_COMMON_LIB}" AND EXISTS "${BROTLI_DEC_LIB}" AND EXISTS "${BROTLI_ENC_LIB}")
-                    target_link_libraries(sdlMS PRIVATE ${BROTLI_COMMON_LIB} ${BROTLI_DEC_LIB} ${BROTLI_ENC_LIB})
-                    message(STATUS "Using Brotli static libraries from vcpkg: ${BROTLI_COMMON_LIB}")
+                    # 使用 --whole-archive 强制包含所有符号，并按依赖顺序链接
+                    target_link_libraries(sdlMS PRIVATE
+                        -Wl,--whole-archive
+                        ${BROTLI_COMMON_LIB}
+                        ${BROTLI_DEC_LIB}
+                        ${BROTLI_ENC_LIB}
+                        -Wl,--no-whole-archive
+                    )
+                    message(STATUS "Using Brotli static libraries from vcpkg with --whole-archive")
                 else()
                     message(FATAL_ERROR "Brotli static libraries not found in vcpkg installation: ${VCPKG_LIB_DIR}")
                 endif()

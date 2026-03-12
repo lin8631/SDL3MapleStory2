@@ -52,14 +52,26 @@ jobs:
             exit 1
           fi
 
-          # 创建 lib 目录（可选，也可以直接放在可执行文件同目录）
+          # 创建 lib 目录
           LIBDIR="build/sdlms/lib"
           mkdir -p "$LIBDIR"
 
-          # 使用 ldd 找出依赖的 FFmpeg 库（以 libav 开头）
-          deps=$(ldd "$EXE" | grep libav | awk '{print $3}')
-          for dep in $deps; do
-            cp "$dep" "$LIBDIR/"
+          # 使用 ldd 列出所有依赖，过滤出 FFmpeg 相关库（包括 libav*, libsw*, libpostproc*, libavdevice*）
+          ldd "$EXE" | awk '/=>/ {print $1, $3}' | grep -E '^(lib(av|sw|postproc|avdevice))' | while read soname path; do
+            if [ -f "$path" ]; then
+              # 获取实际文件路径（跟随符号链接）
+              real_path=$(readlink -f "$path")
+              base_name=$(basename "$real_path")
+              # 复制实际文件到 lib 目录
+              cp "$real_path" "$LIBDIR/$base_name"
+              # 如果库名（soname）与实际文件名不同，创建符号链接
+              if [ "$soname" != "$base_name" ]; then
+                (cd "$LIBDIR" && ln -sf "$base_name" "$soname")
+              fi
+              echo "Copied $soname ($real_path)"
+            else
+              echo "Warning: $soname not found at $path"
+            fi
           done
 
           # 修改 RPATH 使程序优先从 $ORIGIN/lib 查找库

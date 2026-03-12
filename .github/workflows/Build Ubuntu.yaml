@@ -21,14 +21,11 @@ jobs:
           ./vcpkg/bootstrap-vcpkg.sh
           echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
 
-      # 安装静态依赖（使用 x64-linux-static 三元组）
+      # 安装静态依赖（使用 x64-linux 三元组，通过环境变量强制静态）
       - name: Install static dependencies via vcpkg
         run: |
           export VCPKG_LIBRARY_LINKAGE=static
-          $VCPKG_ROOT/vcpkg install \
-            freetype:x64-linux-static \
-            ffmpeg:x64-linux-static \
-            pkgconf
+          $VCPKG_ROOT/vcpkg install freetype ffmpeg pkgconf --triplet=x64-linux
 
       - name: Clean build
         run: rm -rf build
@@ -39,7 +36,7 @@ jobs:
           cmake -B build \
                 -DCMAKE_BUILD_TYPE=Release \
                 -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake" \
-                -DVCPKG_TARGET_TRIPLET=x64-linux-static \
+                -DVCPKG_TARGET_TRIPLET=x64-linux \
                 -S .
 
       - name: Build

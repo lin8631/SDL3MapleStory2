@@ -205,21 +205,27 @@ if(NOT EMSCRIPTEN)
 
     if(NEED_STATIC_BROTLI)
         # 优先使用 vcpkg 提供的 CMake 配置文件
-        find_package(Brotli CONFIG QUIET)
+        find_package(Brotli CONFIG)
         if(Brotli_FOUND)
             target_link_libraries(sdlMS PRIVATE Brotli::brotlicommon Brotli::brotlidec Brotli::brotlienc)
             message(STATUS "Found Brotli via CMake config")
         else()
-            # 显式查找 vcpkg 安装的静态库（使用 NO_DEFAULT_PATH 避免找到系统动态库）
-            set(_vcpkg_lib_dir "${VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/lib")
-            find_library(BROTLI_COMMON_LIB NAMES brotlicommon PATHS ${_vcpkg_lib_dir} NO_DEFAULT_PATH)
-            find_library(BROTLI_DEC_LIB    NAMES brotlidec    PATHS ${_vcpkg_lib_dir} NO_DEFAULT_PATH)
-            find_library(BROTLI_ENC_LIB    NAMES brotlienc    PATHS ${_vcpkg_lib_dir} NO_DEFAULT_PATH)
+            message(STATUS "Brotli CMake config not found, falling back to manual search")
+            # 保存原后缀
+            set(_orig_suffixes ${CMAKE_FIND_LIBRARY_SUFFIXES})
+            # 优先查找静态库
+            set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
+            # 查找库，依赖 CMake 默认搜索路径（vcpkg 工具链已添加）
+            find_library(BROTLI_COMMON_LIB NAMES brotlicommon)
+            find_library(BROTLI_DEC_LIB    NAMES brotlidec)
+            find_library(BROTLI_ENC_LIB    NAMES brotlienc)
+            # 恢复后缀
+            set(CMAKE_FIND_LIBRARY_SUFFIXES ${_orig_suffixes})
             if(BROTLI_COMMON_LIB AND BROTLI_DEC_LIB AND BROTLI_ENC_LIB)
                 target_link_libraries(sdlMS PRIVATE ${BROTLI_COMMON_LIB} ${BROTLI_DEC_LIB} ${BROTLI_ENC_LIB})
-                message(STATUS "Found Brotli static libraries in vcpkg directory")
+                message(STATUS "Found Brotli static libraries: ${BROTLI_COMMON_LIB}")
             else()
-                message(FATAL_ERROR "Brotli static libraries not found in vcpkg installation. Please ensure brotli is installed via vcpkg with static linkage.")
+                message(FATAL_ERROR "Brotli static libraries not found. Please ensure brotli is installed via vcpkg with static linkage.")
             endif()
         endif()
     endif()

@@ -205,22 +205,44 @@ if(NOT EMSCRIPTEN)
 
     if(NEED_STATIC_BROTLI)
         # 优先使用 vcpkg 提供的 CMake 配置文件
-        find_package(Brotli CONFIG)
+        find_package(Brotli CONFIG QUIET)
         if(Brotli_FOUND)
             target_link_libraries(sdlMS PRIVATE Brotli::brotlicommon Brotli::brotlidec Brotli::brotlienc)
             message(STATUS "Found Brotli via CMake config")
         else()
             message(STATUS "Brotli CMake config not found, falling back to manual search")
-            # 保存原后缀
-            set(_orig_suffixes ${CMAKE_FIND_LIBRARY_SUFFIXES})
-            # 优先查找静态库
-            set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
-            # 查找库，依赖 CMake 默认搜索路径（vcpkg 工具链已添加）
-            find_library(BROTLI_COMMON_LIB NAMES brotlicommon)
-            find_library(BROTLI_DEC_LIB    NAMES brotlidec)
-            find_library(BROTLI_ENC_LIB    NAMES brotlienc)
-            # 恢复后缀
-            set(CMAKE_FIND_LIBRARY_SUFFIXES ${_orig_suffixes})
+
+            # 获取 vcpkg 安装目录
+            set(VCPKG_LIB_DIR "")
+            if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
+                set(VCPKG_LIB_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib")
+            elseif(DEFINED ENV{VCPKG_ROOT} AND DEFINED VCPKG_TARGET_TRIPLET)
+                set(VCPKG_LIB_DIR "$ENV{VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/lib")
+            elseif(DEFINED CMAKE_PREFIX_PATH)
+                # 尝试从 CMAKE_PREFIX_PATH 推断
+                foreach(path ${CMAKE_PREFIX_PATH})
+                    if(path MATCHES "vcpkg/installed")
+                        set(VCPKG_LIB_DIR "${path}/lib")
+                        break()
+                    endif()
+                endforeach()
+            endif()
+
+            if(VCPKG_LIB_DIR AND EXISTS "${VCPKG_LIB_DIR}")
+                # 强制搜索 vcpkg 目录，不搜索系统路径
+                find_library(BROTLI_COMMON_LIB NAMES brotlicommon PATHS ${VCPKG_LIB_DIR} NO_DEFAULT_PATH)
+                find_library(BROTLI_DEC_LIB    NAMES brotlidec    PATHS ${VCPKG_LIB_DIR} NO_DEFAULT_PATH)
+                find_library(BROTLI_ENC_LIB    NAMES brotlienc    PATHS ${VCPKG_LIB_DIR} NO_DEFAULT_PATH)
+            else()
+                # 回退到默认搜索，但优先静态库
+                set(_orig_suffixes ${CMAKE_FIND_LIBRARY_SUFFIXES})
+                set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
+                find_library(BROTLI_COMMON_LIB NAMES brotlicommon)
+                find_library(BROTLI_DEC_LIB    NAMES brotlidec)
+                find_library(BROTLI_ENC_LIB    NAMES brotlienc)
+                set(CMAKE_FIND_LIBRARY_SUFFIXES ${_orig_suffixes})
+            endif()
+
             if(BROTLI_COMMON_LIB AND BROTLI_DEC_LIB AND BROTLI_ENC_LIB)
                 target_link_libraries(sdlMS PRIVATE ${BROTLI_COMMON_LIB} ${BROTLI_DEC_LIB} ${BROTLI_ENC_LIB})
                 message(STATUS "Found Brotli static libraries: ${BROTLI_COMMON_LIB}")

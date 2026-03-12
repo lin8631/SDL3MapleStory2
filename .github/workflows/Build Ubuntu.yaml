@@ -1,4 +1,4 @@
-name: Build Ubuntu (gcc)
+name: Build Ubuntu (Static)
 
 on:
   push:
@@ -7,105 +7,60 @@ on:
     branches: [ "main" ]
 
 jobs:
-  ubuntu-gcc:
+  ubuntu-static:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
 
-      - name: Install dependencies
+      # 安装 vcpkg 并设置环境变量
+      - name: Install vcpkg
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
-            libxi-dev libxcursor-dev libxfixes-dev libxrender-dev \
-            libwayland-dev wayland-protocols libxkbcommon-dev \
-            libdbus-1-dev libibus-1.0-dev libudev-dev \
-            libasound2-dev libpulse-dev libpipewire-0.3-dev \
-            libjack-jackd2-dev libsndio-dev \
-            libgl1-mesa-dev libgles2-mesa-dev \
-            libegl1-mesa-dev libdrm-dev libgbm-dev \
-            libusb-1.0-0-dev libunwind-dev \
-            libpng-dev libbz2-dev libharfbuzz-dev \
-            libfreetype-dev \
-            libavformat-dev libavcodec-dev libavutil-dev libswscale-dev
+          git clone https://github.com/Microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.sh
+          echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
 
-      - name: Install patchelf (for RPATH modification)
-        run: sudo apt-get install -y patchelf
+      # 安装静态依赖（使用 x64-linux-static 三元组）
+      - name: Install static dependencies via vcpkg
+        run: |
+          export VCPKG_LIBRARY_LINKAGE=static
+          $VCPKG_ROOT/vcpkg install \
+            freetype:x64-linux-static \
+            ffmpeg:x64-linux-static \
+            pkgconf
 
       - name: Clean build
         run: rm -rf build
 
+      # 配置 CMake，使用 vcpkg 工具链
       - name: Configure CMake
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -S .
+        run: |
+          cmake -B build \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake" \
+                -DVCPKG_TARGET_TRIPLET=x64-linux-static \
+                -S .
 
       - name: Build
         run: cmake --build build
 
-      - name: Copy all runtime dependencies and set RPATH
+      # 查找可执行文件
+      - name: Find executable
+        id: find_exe
         run: |
-          EXE="build/sdlms/sdlMS"
-          if [ ! -f "$EXE" ]; then
-            echo "Executable not found"
+          EXE=$(find ${{ github.workspace }}/build -type f -name "sdlMS" | head -n 1)
+          if [ -z "$EXE" ]; then
+            echo "No executable found" >&2
             exit 1
           fi
+          echo "EXE_PATH=$EXE" >> $GITHUB_ENV
+          echo "Found executable at: $EXE"
 
-          LIBDIR="build/sdlms/lib"
-          mkdir -p "$LIBDIR"
-
-          # 定义系统基本库的正则表达式（这些库通常不复制，因为目标系统会有）
-          EXCLUDE_REGEX='^(ld-linux|libc\.so|libdl\.so|libm\.so|libpthread\.so|librt\.so|libgcc_s\.so|libstdc\+\+\.so|linux-vdso)'
-
-          function copy_with_links() {
-            local lib="$1"
-            local target_dir="$2"
-            local real_path=$(readlink -f "$lib")
-            local base_name=$(basename "$real_path")
-            local soname=$(basename "$lib")
-            if [ ! -f "$target_dir/$base_name" ]; then
-              cp "$real_path" "$target_dir/$base_name"
-              echo "Copied $real_path"
-            fi
-            if [ "$soname" != "$base_name" ] && [ ! -L "$target_dir/$soname" ]; then
-              ln -sf "$base_name" "$target_dir/$soname"
-              echo "Created symlink $soname -> $base_name"
-            fi
-          }
-
-          function process_file() {
-            local file="$1"
-            ldd "$file" 2>/dev/null | while read line; do
-              if [[ $line =~ "=>" ]]; then
-                soname=$(echo "$line" | awk '{print $1}')
-                path=$(echo "$line" | awk '{print $3}')
-              else
-                path=$(echo "$line" | awk '{print $1}')
-                soname=$(basename "$path")
-              fi
-              if [ -z "$path" ] || [ "$path" = "not" ] || [[ "$soname" =~ $EXCLUDE_REGEX ]]; then
-                continue
-              fi
-              if [ -f "$path" ]; then
-                copy_with_links "$path" "$LIBDIR"
-              else
-                echo "Warning: $soname not found at $path"
-              fi
-            done
-          }
-
-          process_file "$EXE"
-
-          # 修改可执行文件的 RPATH
-          patchelf --set-rpath '$ORIGIN/lib' "$EXE"
-
-          echo "All dependencies copied and RPATH set."
-
-      - name: Upload artifact (executable + libraries)
+      # 上传单一可执行文件
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sdlMS-ubuntu
-          path: |
-            build/sdlms/sdlMS
-            build/sdlms/lib/*.so*
+          name: sdlMS-ubuntu-static
+          path: ${{ env.EXE_PATH }}
           if-no-files-found: error

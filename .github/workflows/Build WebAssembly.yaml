@@ -40,6 +40,10 @@ jobs:
           cd build
           emmake make -j$(nproc)
 
+      # 重命名生成的 HTML 文件为 index.html
+      - name: Rename HTML to index.html
+        run: mv build/sdlMS.html build/index.html
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -49,4 +53,4 @@ jobs:
             build/sdlMS.js
             build/sdlMS.wasm
             build/sdlMS.data
-          if-no-files-found: error  # 改为 error 以便及时发现文件缺失
+          if-no-files-found: error

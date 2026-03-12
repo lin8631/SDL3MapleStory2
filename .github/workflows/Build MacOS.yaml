@@ -1,4 +1,4 @@
-name: Build MacOS（静态库）
+name: Build MacOS (Static)
 
 on:
   push:
@@ -21,27 +21,26 @@ jobs:
           ./vcpkg/bootstrap-vcpkg.sh
           echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
 
-      # 安装静态依赖（强制静态链接）
+      # 更新 vcpkg 端口文件（确保 freetype 等包的下载 URL 正确）
+      - name: Update vcpkg ports
+        run: $VCPKG_ROOT/vcpkg update
+
+      # 安装静态依赖（使用 arm64-osx 三元组，通过环境变量强制静态）
       - name: Install static dependencies via vcpkg
         run: |
           export VCPKG_LIBRARY_LINKAGE=static
-          $VCPKG_ROOT/vcpkg install \
-            freetype:arm64-osx \
-            ffmpeg:arm64-osx \
-            pkgconf \
-            --triplet=arm64-osx
+          $VCPKG_ROOT/vcpkg install freetype ffmpeg pkgconf --triplet=arm64-osx
 
       - name: Clean build
         run: rm -rf build
 
-      # 配置 CMake，使用 vcpkg 工具链并指定 arm64 架构
+      # 配置 CMake，使用 vcpkg 工具链
       - name: Configure CMake
         run: |
           cmake -B build \
                 -DCMAKE_BUILD_TYPE=Release \
                 -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake" \
                 -DVCPKG_TARGET_TRIPLET=arm64-osx \
-                -DCMAKE_OSX_ARCHITECTURES=arm64 \
                 -S .
 
       - name: Build

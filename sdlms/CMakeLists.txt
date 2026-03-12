@@ -27,7 +27,6 @@ if(NOT EMSCRIPTEN)
 
         if(PC_AVFORMAT_FOUND AND PC_AVCODEC_FOUND AND PC_AVUTIL_FOUND AND PC_SWSCALE_FOUND AND PC_SWRESAMPLE_FOUND)
             message(STATUS "Found FFmpeg via pkg-config")
-            # 使用传统变量（避免 CMake 导入目标在部分环境失效的问题）
             set(FFMPEG_INCLUDE_DIRS
                 ${PC_AVFORMAT_INCLUDE_DIRS}
                 ${PC_AVCODEC_INCLUDE_DIRS}
@@ -38,13 +37,34 @@ if(NOT EMSCRIPTEN)
             list(REMOVE_DUPLICATES FFMPEG_INCLUDE_DIRS)
             include_directories(${FFMPEG_INCLUDE_DIRS})
 
-            set(FFMPEG_LIBRARIES
-                ${PC_AVFORMAT_LIBRARIES}
-                ${PC_AVCODEC_LIBRARIES}
-                ${PC_AVUTIL_LIBRARIES}
-                ${PC_SWSCALE_LIBRARIES}
-                ${PC_SWRESAMPLE_LIBRARIES}
-            )
+            # 判断是否需要静态链接（使用环境变量或平台判断）
+            set(NEED_STATIC_BROTLI FALSE)
+            if(APPLE)
+                set(NEED_STATIC_BROTLI TRUE)
+            elseif(DEFINED ENV{VCPKG_LIBRARY_LINKAGE} AND "$ENV{VCPKG_LIBRARY_LINKAGE}" STREQUAL "static")
+                set(NEED_STATIC_BROTLI TRUE)
+            endif()
+
+            if(NEED_STATIC_BROTLI)
+                # 静态链接：使用包含私有依赖的库列表
+                set(FFMPEG_LIBRARIES
+                    ${PC_AVFORMAT_STATIC_LIBRARIES}
+                    ${PC_AVCODEC_STATIC_LIBRARIES}
+                    ${PC_AVUTIL_STATIC_LIBRARIES}
+                    ${PC_SWSCALE_STATIC_LIBRARIES}
+                    ${PC_SWRESAMPLE_STATIC_LIBRARIES}
+                )
+                message(STATUS "Using FFmpeg static libraries with private dependencies")
+            else()
+                # 动态链接：使用普通库列表
+                set(FFMPEG_LIBRARIES
+                    ${PC_AVFORMAT_LIBRARIES}
+                    ${PC_AVCODEC_LIBRARIES}
+                    ${PC_AVUTIL_LIBRARIES}
+                    ${PC_SWSCALE_LIBRARIES}
+                    ${PC_SWRESAMPLE_LIBRARIES}
+                )
+            endif()
 
             set(FFMPEG_LIBRARY_DIRS
                 ${PC_AVFORMAT_LIBRARY_DIRS}
@@ -149,7 +169,6 @@ if(NOT EMSCRIPTEN)
                 if(EXISTS "${HARDCODED_FFMPEG_PATH}/include" AND EXISTS "${HARDCODED_FFMPEG_PATH}/lib")
                     include_directories("${HARDCODED_FFMPEG_PATH}/include")
                     link_directories("${HARDCODED_FFMPEG_PATH}/lib")
-                    # 设置库变量为硬编码库名
                     set(FFMPEG_LIBRARIES avformat avcodec avutil swscale swresample)
                     message(STATUS "Using hardcoded FFmpeg path: ${HARDCODED_FFMPEG_PATH}")
                 else()
@@ -159,7 +178,6 @@ if(NOT EMSCRIPTEN)
                 message(FATAL_ERROR "Required FFmpeg components not found. Please install FFmpeg or set FFMPEG_ROOT to the correct path.")
             endif()
         else()
-            # 所有组件找到，添加头文件路径并去重
             list(REMOVE_DUPLICATES FFMPEG_INCLUDE_DIRS)
             list(REMOVE_DUPLICATES FFMPEG_LIBRARIES)
             include_directories(${FFMPEG_INCLUDE_DIRS})
@@ -195,7 +213,7 @@ if(NOT EMSCRIPTEN)
     # 链接 FFmpeg 库（通过 pkg-config 或手动查找得到）
     target_link_libraries(sdlMS PRIVATE ${FFMPEG_LIBRARIES})
 
-    # 判断是否需要静态链接 Brotli
+    # 判断是否需要静态链接 Brotli（用于 macOS 或 vcpkg 静态构建）
     set(NEED_STATIC_BROTLI FALSE)
     if(APPLE)
         set(NEED_STATIC_BROTLI TRUE)
@@ -218,15 +236,25 @@ if(NOT EMSCRIPTEN)
                 set(BROTLI_DEC_LIB    "${VCPKG_LIB_DIR}/libbrotlidec.a")
                 set(BROTLI_ENC_LIB    "${VCPKG_LIB_DIR}/libbrotlienc.a")
                 if(EXISTS "${BROTLI_COMMON_LIB}" AND EXISTS "${BROTLI_DEC_LIB}" AND EXISTS "${BROTLI_ENC_LIB}")
-                    # 使用 --whole-archive 强制包含所有符号，并按依赖顺序链接
-                    target_link_libraries(sdlMS PRIVATE
-                        -Wl,--whole-archive
-                        ${BROTLI_COMMON_LIB}
-                        ${BROTLI_DEC_LIB}
-                        ${BROTLI_ENC_LIB}
-                        -Wl,--no-whole-archive
-                    )
-                    message(STATUS "Using Brotli static libraries from vcpkg with --whole-archive")
+                    if(APPLE)
+                        # macOS 使用 -force_load 替代 --whole-archive
+                        target_link_libraries(sdlMS PRIVATE
+                            -Wl,-force_load,${BROTLI_COMMON_LIB}
+                            -Wl,-force_load,${BROTLI_DEC_LIB}
+                            -Wl,-force_load,${BROTLI_ENC_LIB}
+                        )
+                        message(STATUS "Using Brotli static libraries from vcpkg with -force_load on macOS")
+                    else()
+                        # Linux/其他使用 --whole-archive
+                        target_link_libraries(sdlMS PRIVATE
+                            -Wl,--whole-archive
+                            ${BROTLI_COMMON_LIB}
+                            ${BROTLI_DEC_LIB}
+                            ${BROTLI_ENC_LIB}
+                            -Wl,--no-whole-archive
+                        )
+                        message(STATUS "Using Brotli static libraries from vcpkg with --whole-archive")
+                    endif()
                 else()
                     message(FATAL_ERROR "Brotli static libraries not found in vcpkg installation: ${VCPKG_LIB_DIR}")
                 endif()

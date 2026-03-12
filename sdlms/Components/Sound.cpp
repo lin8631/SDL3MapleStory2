@@ -113,14 +113,14 @@ void mixAudio(Uint8 *audio1, Uint8 *audio2, Uint8 *output, int length, float vol
     applyVolume(audio2, length, volume);
     for (int i = 0; i < length / 2; i++)
     {
-        int16_t sample1 = reinterpret_cast<const int16_t *>(audio1)[i / 2];
-        int16_t sample2 = reinterpret_cast<const int16_t *>(audio2)[i / 2];
-        int32_t mixedSample = sample1 + sample2;
-        if (mixedSample > INT16_MAX)
-            mixedSample = INT16_MAX;
-        if (mixedSample < INT16_MIN)
-            mixedSample = INT16_MIN;
-        reinterpret_cast<int16_t *>(output)[i / 2] = static_cast<int16_t>(mixedSample);
+        float sample1 = reinterpret_cast<const int16_t *>(audio1)[i] / 32768.0f;
+        float sample2 = reinterpret_cast<const int16_t *>(audio2)[i] / 32768.0f;
+        float mixedSample = sample1 + sample2;
+        if (mixedSample > 1.0f)
+            mixedSample = 1.0f;
+        if (mixedSample < -1.0f)
+            mixedSample = -1.0f;
+        reinterpret_cast<int16_t *>(output)[i] = static_cast<int16_t>(mixedSample * 32767.0f);
     }
 }
 

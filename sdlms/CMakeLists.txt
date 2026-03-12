@@ -195,16 +195,26 @@ if(NOT EMSCRIPTEN)
     # 链接 FFmpeg 库（通过 pkg-config 或手动查找得到）
     target_link_libraries(sdlMS PRIVATE ${FFMPEG_LIBRARIES})
 
-    # macOS 静态构建需要显式链接 Brotli 静态库（解决符号缺失）
-    if(APPLE)
+    # 链接 Brotli 静态库（所有平台）
+    # 优先使用 vcpkg 提供的 CMake 配置文件
+    find_package(Brotli CONFIG QUIET)
+    if(Brotli_FOUND)
+        target_link_libraries(sdlMS PRIVATE Brotli::brotlicommon Brotli::brotlidec Brotli::brotlienc)
+        message(STATUS "Found Brotli via CMake config")
+    else()
+        # 保存当前后缀，并优先查找静态库
+        set(_orig_suffixes ${CMAKE_FIND_LIBRARY_SUFFIXES})
+        set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
         find_library(BROTLI_COMMON_LIB NAMES brotlicommon)
         find_library(BROTLI_DEC_LIB    NAMES brotlidec)
         find_library(BROTLI_ENC_LIB    NAMES brotlienc)
+        # 恢复后缀
+        set(CMAKE_FIND_LIBRARY_SUFFIXES ${_orig_suffixes})
         if(BROTLI_COMMON_LIB AND BROTLI_DEC_LIB AND BROTLI_ENC_LIB)
             target_link_libraries(sdlMS PRIVATE ${BROTLI_COMMON_LIB} ${BROTLI_DEC_LIB} ${BROTLI_ENC_LIB})
-            message(STATUS "Found Brotli static libraries for macOS")
+            message(STATUS "Found Brotli static libraries via find_library")
         else()
-            message(WARNING "Brotli static libraries not found on macOS. Static linking may fail.")
+            message(FATAL_ERROR "Brotli libraries not found. Please ensure brotli is installed via vcpkg.")
         endif()
     endif()
 endif()

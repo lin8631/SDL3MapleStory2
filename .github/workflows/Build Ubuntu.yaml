@@ -14,11 +14,28 @@ jobs:
         with:
           submodules: 'recursive'
 
-      # 安装系统构建工具（包括 nasm，因为 ffmpeg 需要它）
+      # 安装系统构建工具（nasm 为 FFmpeg 所需）
       - name: Install system build tools
         run: |
           sudo apt-get update
           sudo apt-get install -y nasm
+
+      # 安装 SDL3 所需的系统依赖（X11、Wayland、OpenGL 等）
+      - name: Install SDL3 system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxi-dev libxcursor-dev libxfixes-dev libxrender-dev \
+            libwayland-dev wayland-protocols libxkbcommon-dev \
+            libdbus-1-dev libibus-1.0-dev libudev-dev \
+            libasound2-dev libpulse-dev libpipewire-0.3-dev \
+            libjack-jackd2-dev libsndio-dev \
+            libgl1-mesa-dev libgles2-mesa-dev \
+            libegl1-mesa-dev libdrm-dev libgbm-dev \
+            libusb-1.0-0-dev libunwind-dev \
+            libpng-dev libbz2-dev libharfbuzz-dev \
+            libfreetype-dev
 
       # 安装 vcpkg 并设置环境变量
       - name: Install vcpkg

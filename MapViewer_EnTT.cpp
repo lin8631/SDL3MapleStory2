@@ -119,6 +119,9 @@ public:
     std::shared_ptr<Wz_Node> selectedNode;
     std::string selectedNodeTitle = "";
     
+    // 地图数据（用于保存解析后的数据）
+    std::unique_ptr<WzLibCpp::MapData> mapData;
+    
     // 当前渲染的MapRenderer（使用unique_ptr管理生命周期，避免静态局部变量问题）
     std::unique_ptr<MapRenderer> ownedMapRenderer;
     
@@ -140,7 +143,7 @@ private:
     bool initSDL(int width, int height);
     bool initImGui();
     void loadTextures(const std::string& wzPath);
-    void logMapInfo(const MapData& mapData);
+    void logMapInfo();
 };
 
 
@@ -352,7 +355,7 @@ bool AppState::initialize(int windowWidth, int windowHeight) {
     PluginBase::PluginManager::RegisterStructures({structure});
 
     // 创建MapData实例
-    MapData mapData;
+    mapData = std::make_unique<WzLibCpp::MapData>();
 
     // 使用MapLoader加载地图
     MapLoader loader(structure);
@@ -364,7 +367,7 @@ bool AppState::initialize(int windowWidth, int windowHeight) {
     }
 
     // 加载地图数据到结构体
-    mapLoaded = mapData.Load(mapNode);
+    mapLoaded = mapData->Load(mapNode);
 
     if (!mapLoaded) {
         std::cerr << "地图加载失败" << std::endl;
@@ -372,7 +375,7 @@ bool AppState::initialize(int windowWidth, int windowHeight) {
     }
 
     // 输出地图信息
-    logMapInfo(mapData);
+    logMapInfo();
 
     // 初始化SDL
     if (!initSDL(windowWidth, windowHeight)) {
@@ -385,7 +388,7 @@ bool AppState::initialize(int windowWidth, int windowHeight) {
     }
 
     // 创建摄像机实体
-    const auto& vrect = mapData.getVRect();
+    const auto& vrect = mapData->getVRect();
     int camX = vrect.X;
     int camY = vrect.Y;
     int camW = vrect.Width > 0 ? vrect.Width : 1024;
@@ -456,16 +459,16 @@ void AppState::loadTextures(const std::string& wzPath) {
     std::cout << "[MapViewer_EnTT(AppState::loadTextures)]: Textures loaded" << std::endl;
 }
 
-void AppState::logMapInfo(const MapData& mapData) {
+void AppState::logMapInfo() {
     std::cout << "[MapViewer_EnTT(AppState::logMapInfo)]: ====" << std::endl;
-    std::cout << "[MapInfo] ID=" << mapData.getID()
-              << " Name='" << mapData.getName() << "'"
-              << " BGM='" << mapData.getBgm() << "'"
+    std::cout << "[MapInfo] ID=" << mapData->getID()
+              << " Name='" << mapData->getName() << "'"
+              << " BGM='" << mapData->getBgm() << "'"
               << std::endl;
-    std::cout << "  脚踏板: " << mapData.getFootholds().size()
-              << ", 传送门: " << mapData.getPortals().size()
-              << ", 生命点: " << mapData.getLifes().size()
-              << ", 背景: " << mapData.getBacks().size()
+    std::cout << "  脚踏板: " << mapData->getFootholds().size()
+              << ", 传送门: " << mapData->getPortals().size()
+              << ", 生命点: " << mapData->getLifes().size()
+              << ", 背景: " << mapData->getBacks().size()
               << std::endl;
     std::cout << "=====================================" << std::endl;
 }

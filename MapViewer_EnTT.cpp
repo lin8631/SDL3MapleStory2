@@ -133,6 +133,9 @@ public:
     std::shared_ptr<Wz_Node> selectedNode;
     std::string selectedNodeTitle = "";
     
+    // 当前渲染的MapRenderer（使用unique_ptr管理生命周期，避免静态局部变量问题）
+    std::unique_ptr<MapRenderer> ownedMapRenderer;
+    
 private:
     // 私有辅助方法
     bool initSDL(int width, int height);
@@ -418,16 +421,16 @@ bool AppState::initImGui() {
 }
 
 void AppState::loadTextures(const std::string& wzPath) {
-    std::cout << "[MapViewer_EnTT(AppState::loadTextures)]: 正在加载纹理..." << std::endl;
-    static MapRenderer mr(registry);
-    mapRenderer = &mr;
+    std::cout << "[MapViewer_EnTT(AppState::loadTextures)]: Loading textures..." << std::endl;
+    ownedMapRenderer = std::make_unique<MapRenderer>(registry);
+    mapRenderer = ownedMapRenderer.get();
     mapRenderer->setMapData(mapNode, wzPath);
     mapRenderer->loadTextures(renderer);
     
     // 设置TextureCache的ResourceLoader
     TextureCache::getInstance().setResourceLoader(mapRenderer->getResourceLoader());
     
-    std::cout << "[MapViewer_EnTT(AppState::loadTextures)]: 纹理加载完成" << std::endl;
+    std::cout << "[MapViewer_EnTT(AppState::loadTextures)]: Textures loaded" << std::endl;
 }
 
 void AppState::logMapInfo(const MapData& mapData) {
@@ -711,6 +714,10 @@ void AppState::cleanup() {
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
 
+    // 清理ownedMapRenderer（会先销毁其管理的MapRenderer）
+    ownedMapRenderer.reset();
+    mapRenderer = nullptr;
+    
     // 销毁SDL资源
     if (renderer) {
         SDL_DestroyRenderer(renderer);

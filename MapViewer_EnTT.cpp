@@ -71,12 +71,6 @@ using namespace MapleEngine;
  */
 class AppState {
 public:
-    // 获取单例实例
-    static AppState& getInstance() {
-        static AppState instance;
-        return instance;
-    }
-    
     // 初始化方法
     bool initialize(int windowWidth = 1068, int windowHeight = 600);
     
@@ -98,7 +92,7 @@ public:
     entt::registry& getRegistry() { return registry; }
     MapRenderer* getMapRenderer() { return mapRenderer; }
     
-    // 成员变量（保持公共以兼容现有代码）
+    // 成员变量
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
     entt::registry registry;
@@ -107,17 +101,8 @@ public:
     bool mapLoaded = false;
     int mapWidth = 1068;
     int mapHeight = 600;
-    entt::entity cameraEntity = entt::null;  // 初始化为null实体
+    entt::entity cameraEntity = entt::null;
     MapRenderer* mapRenderer = nullptr;
-    
-public:
-    // 构造函数（公共以兼容现有代码）
-    AppState() = default;
-    ~AppState() = default;
-    
-    // 禁用拷贝和赋值
-    AppState(const AppState&) = delete;
-    AppState& operator=(const AppState&) = delete;
     
     // 键盘状态变量（用于边沿检测）
     bool prevZoomIn = false, prevZoomOut = false;
@@ -135,6 +120,19 @@ public:
     
     // 当前渲染的MapRenderer（使用unique_ptr管理生命周期，避免静态局部变量问题）
     std::unique_ptr<MapRenderer> ownedMapRenderer;
+    
+    AppState() = default;
+    ~AppState() = default;
+    
+    // 禁用拷贝和赋值
+    AppState(const AppState&) = delete;
+    AppState& operator=(const AppState&) = delete;
+    
+    // 单例获取
+    static AppState& getInstance() {
+        static AppState instance;
+        return instance;
+    }
     
 private:
     // 私有辅助方法

@@ -107,7 +107,7 @@ public:
     bool mapLoaded = false;
     int mapWidth = 1068;
     int mapHeight = 600;
-    entt::entity cameraEntity;
+    entt::entity cameraEntity = entt::null;  // 初始化为null实体
     MapRenderer* mapRenderer = nullptr;
     
 public:
@@ -470,6 +470,9 @@ bool AppState::handleEvent(SDL_Event* event) {
 }
 
 void AppState::update() {
+    // 空指针保护
+    if (!mapRenderer || cameraEntity == entt::null) return;
+    
     // 获取键盘状态
     const bool* state = SDL_GetKeyboardState(nullptr);
     
@@ -526,6 +529,9 @@ void AppState::update() {
 }
 
 void AppState::render() {
+    // 空指针保护
+    if (!mapRenderer || cameraEntity == entt::null) return;
+    
     // 渲染游戏画面
     CameraComp& camComp = registry.get<CameraComp>(cameraEntity);
     mapRenderer->render(renderer, camComp, mapWidth, mapHeight);
@@ -536,15 +542,13 @@ void AppState::render() {
     ImGui::NewFrame();
 
     // 创建调试窗口
-    static bool show_tree_window = true;
-    show_tree_window = showDebugWindow;
-    if (show_tree_window) {
-        ImGui::Begin("WZ 资源浏览器", &show_tree_window, ImGuiWindowFlags_MenuBar);
+    if (showDebugWindow) {
+        ImGui::Begin("WZ Resource Browser", &showDebugWindow, ImGuiWindowFlags_MenuBar);
 
         // 菜单栏
         if (ImGui::BeginMenuBar()) {
-            if (ImGui::BeginMenu("视图")) {
-                ImGui::MenuItem("资源浏览器", "Tab", &showDebugWindow);
+            if (ImGui::BeginMenu("View")) {
+                ImGui::MenuItem("Resource Browser", "Tab", &showDebugWindow);
                 ImGui::EndMenu();
             }
             ImGui::EndMenuBar();

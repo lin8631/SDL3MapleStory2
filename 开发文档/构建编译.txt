@@ -1,6 +1,7 @@
 - 构建前准备
   - 确保在仓库根目录:
-  rm -rf build; mkdir -p build
+  rm -rf build     删除
+  mkdir -p build   创建
   
 - 配置
   cmake -S . -B build -DWZLIB_USE_INTERNAL_AES=ON

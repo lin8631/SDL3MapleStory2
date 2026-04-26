@@ -1,0 +1,556 @@
+    自动加载所有 WZ 文件
+    通过 structure->setAutoDetectExtFiles(true) 启用自动检测，
+	加载 Base.wz 时会自动加载同目录下其他 .wz 文件，因此无需手动加载 Map.wz。
+---------------------------------------------------------------------
+    加载统计输出
+使用 std::chrono 测量从开始加载到所有 WZ 文件加载完成的耗时。
+遍历structure->getWzFiles()，统计成功数量、失败数量、总图片数，并输出每个文件的名称和图片数。
+
+    调整流程
+
+        先加载 Base.wz，获取所有文件信息，然后注册 PluginManager，再加载具体地图。
+
+        添加了缺失的 GetInt 辅助函数，因为原代码中 loadBackTextures 等函数使用了 GetInt，但未定义。
+
+    错误处理
+    如果加载失败（如Base.wz不存在或文件损坏），程序会输出错误并退出；若部分文件加载失败（例如某些扩展文件损坏），仍会统计失败数量并继续执行（但可能影响地图加载）。
+
+
+=================================================================
+
+
+
+
+
+
+
+
+
+
+请加载/home/ltj/MapleStory/072/Data/Base
+
+本项目是基于/home/ltj/MapleStory/wc/WzComparerR2/WzComparerR2目录中的c#代码翻译生成的，请基于c#原始代码修复
+
+
+注意: 当前SDL3构建禁用了X11/Wayland(dummy video driver)，仅用于验证静态链接功能。
+
+真正的跨平台部署需要:
+Windows: 静态链接 SDL3 + 可直接运行
+Linux: 需要静态链接 X11/Wayland 依赖或使用 -static-libgcc -static-libstdc++
+macOS: 需要包含 Cocoa 框架
+
+如需完整的单文件部署,可以添加更多构建配置来静态链接 X11 等依赖库。
+
+SDL_VIDEODRIVER=x11 gdb -batch -ex "run" -ex "bt" ./sdlMS 2>&1 | tail -30
+
+请加载/home/ltj/MapleStory/072/Data/Base.wz，读取map 100000000并且使用sdl3和entt框架完成渲染
+
+
+
+
+/home/ltj/MapleStory/MSC/WzLibCpp/
+├── CMakeLists.txt                    # WzLibCpp 主构建配置 (C++20)
+├── WzLibCpp.sln                      # Visual Studio 解决方案
+├── build/                            # WzLibCpp 构建输出
+│   ├── libWzLibCpp.a                # 静态库 (~10MB)
+│   └── LoadWz                       # 示例程序
+│
+├── Engine/                           # MapleEngine 游戏引擎
+│   ├── CMakeLists.txt                # MapleEngine 构建配置 (C++17)
+│   ├── build/                        # MapleEngine 构建输出
+│   │   ├── libMapleEngine.a         # 静态库 (~3MB)
+│   │   └── MapleEngineDemo          # 演示程序 (~6MB)
+│   │
+│   ├── Core/                         # 核心引擎模块
+│   │   ├── include/
+│   │   │   ├── Engine.hpp           # 引擎单例（SDL3 初始化、主循环、渲染器）
+│   │   │   └── Camera.hpp           # 相机 + InputState 输入管理
+│   │   └── src/
+│   │       └── Engine.cpp
+│   │
+│   ├── ECS/                          # ECS 实体组件系统
+│   │   └── include/
+│   │       └── ECS.hpp              # EnTT 封装，Scene、TransformComponent、SpriteComponent
+│   │
+│   ├── Renderer/                     # 渲染系统
+│   │   ├── include/
+│   │   │   ├── MeshBatcher.hpp      # 网格批处理（SDL3 渲染指令批量化）
+│   │   │   └── Texture.hpp          # 纹理生命周期管理
+│   │   └── src/
+│   │       └── MeshBatcher.cpp
+│   │
+│   ├── Animation/                    # 动画系统
+│   │   └── include/
+│   │       └── Animation.hpp        # Frame、AnimationData、FrameAnimator、StateMachineAnimator
+│   │
+│   ├── MapRender/                    # 地图渲染模块
+│   │   ├── include/
+│   │   │   └── MapData.hpp         # MapData、MapRenderer、ResourceLoader 声明
+│   │   └── src/
+│   │       ├── MapData.cpp          # 地图数据加载（背景、对象、瓦片、脚踏板、生命、传送门）
+│   │       ├── MapRenderer.cpp      # 地图渲染器实现
+│   │       └── ResourceLoader.cpp   # PNG 内存加载、纹理缓存、动画数据缓存
+│   │
+│   ├── Scene/                        # 场景图
+│   │   └── include/
+│   │       └── MapScene.hpp         # SceneNode、ContainerNode、LayerNode、MapScene 及地图元素结构
+│   │
+│   ├── UI/                           # UI 系统
+│   │   ├── include/
+│   │   │   └── UI.hpp              # MiniMapUI、TooltipUI、TopBarUI、UIManager
+│   │   └── src/
+│   │       └── UI.cpp
+│   │
+│   ├── examples/
+│   │   └── MapleEngineDemo.cpp       # WASD 移动相机演示
+│   │
+│   ├── Entt/                         # EnTT ECS 库 (v3.16.0)
+│   │   ├── src/entt/               # 完整源码
+│   │   ├── single_include/          # 单头文件版本 (entt.hpp)
+│   │   └── README.md
+│   │
+│   ├── SDL-release-3.4.2/           # SDL3 源码 (3.4.2)
+│   │   └── build_static/           # SDL3 静态构建目录
+│   │
+│   └── SDL3_install/                # SDL3 安装目录（静态编译产物）
+│       ├── include/SDL3/           # SDL3 头文件
+│       └── lib/
+│           ├── libSDL3.a           # 静态库 (~4.5MB)
+│           └── cmake/SDL3/         # CMake 配置
+│
+├── include/WzLibCpp/                # WzLibCpp 公共头文件
+│   ├── Wz_Type.hpp                 # WZ 文件类型枚举 (Base, Character, Map, Mob...)
+│   ├── Wz_Header.hpp               # PKG1/PKG2 头解析、版本检测、hashVersion
+│   ├── Wz_Crypto.hpp               # AES-256-ECB / BMS / KMS / GMS 解密接口
+│   ├── Wz_Node.hpp                 # 节点树、路径查找、自动解压
+│   ├── Wz_File.hpp                 # 文件加载、目录树、偏移计算、版本验证
+│   ├── Wz_Directory.hpp            # 目录结构管理
+│   ├── Wz_Image.hpp                # 二进制格式解析 (Canvas, Vector2D, Convex2D, UOL...)
+│   ├── Wz_Png.hpp                  # DXT1/3/5 解压、PNG 编码、校验和
+│   ├── Wz_BinaryReader.hpp         # 加密检测、二进制读取
+│   ├── Wz_Value.hpp                # 类型安全变体值 (int/float/string/bool)
+│   ├── Wz_Structure.hpp            # WZ 结构管理、文件注册、加密初始化
+│   ├── Wz_Capabilities.hpp         # WZ 文件能力检测
+│   ├── Wz_Vector.hpp               # 二维向量
+│   ├── Wz_Convex.hpp               # 凸多边形
+│   ├── Wz_Uol.hpp                  # UOL 链接
+│   ├── Wz_RawData.hpp              # 原始数据
+│   ├── Wz_Reader.hpp               # WZ 读取器基类
+│   ├── Wz_Sound.hpp                # 音频数据
+│   ├── Wz_Video.hpp                # 视频数据
+│   ├── Wz_PartialStream.hpp        # 部分流
+│   ├── MapDataFull.hpp             # 完整地图数据 (C++ 实现)
+│   ├── MapData.hpp                 # 地图数据结构
+│   ├── MapData2.hpp                # 地图数据结构 v2
+│   ├── IMapleStoryFile.hpp         # 抽象文件接口
+│   ├── Cryptography/               # 加密模块
+│   │   ├── ChaCha20CryptoTransform.hpp
+│   │   └── Snow2CryptoTransform.hpp
+│   ├── Utilities/                  # 工具模块
+│   │   ├── IWzStringPool.hpp       # 字符串池接口
+│   │   ├── SimpleWzStringPool.hpp   # 简单字符串池实现
+│   │   └── WzBinaryReader.hpp      # 二进制读取工具
+│   └── PluginBase/                 # 插件系统
+│       ├── PluginManager.hpp       # 节点查找、事件系统
+│       └── FindWzEventArgs.hpp     # 查找事件参数
+│
+├── Game/WzLib/                     # WzLibCpp 实现文件
+│   ├── Wz_Type.cpp
+│   ├── Wz_Header.cpp
+│   ├── Wz_Capabilities.cpp
+│   ├── Wz_Crypto.cpp               # AES 密钥流生成、加密检测
+│   ├── Wz_Node.cpp
+│   ├── Wz_File.cpp
+│   ├── Wz_Directory.cpp
+│   ├── Wz_Image.cpp
+│   ├── Wz_Png.cpp                  # DXT 解压、PNG 编码
+│   ├── Wz_BinaryReader.cpp
+│   └── Wz_Structure.cpp
+│
+└── examples/
+    └── LoadWz.cpp                  # 示例: 加载 WZ + 测试地图数据
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+以下是实现您需求的逐步方案，已结合当前项目结构和您提供的 SDL3 源码。
+
+1. 构建静态 SDL3 并启用 SDL_image
+
+禁用 XTEST（避免编译错误）：
+cd /home/ltj/MapleStory/MSC/WzLibCpp/Engine/SDL3_build
+rm -rf *
+cmake -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DSDL3_INSTALL_TESTS=OFF \
+      -DSDL3_EXAMPLES=OFF \
+      -DSDL3_TEST=OFF \
+      -DSDL_X11_XTEST=OFF \
+      -DCMAKE_INSTALL_PREFIX=/home/ltj/MapleStory/MSC/WzLibCpp/Engine/SDL3_install \
+      /home/ltj/MapleStory/MSC/WzLibCpp/Engine/SDL-release-3.4.2
+make -j$(nproc) && make install
+安装 SDL_image（静态版）（可选，若不需要可跳过，此时只用兜底背景纹理）：
+下载 SDL_image 源码（如 SDL3_image），同样使用 -DBUILD_SHARED_LIBS=OFF 配置并安装到相同前缀（/home/ltj/MapleStory/MSC/WzLibCpp/Engine/SDL3_install）。
+2. 修改 MapViewer_EnTT.cpp 以启用 SDL_image 并实现纹理缓存
+
+打开 HAS_SDL_IMAGE：将第 8 行 #define HAS_SDL_IMAGE 0 改为 1。
+添加纹理管理器（简单实现，使用 std::unordered_map<std::string, SDL_Texture*> 按 WZ 路径缓存）。
+在加载地图图片后调用 Wz_Image::extractPng() 获取 PNG 数据，转换为 SDL_Texture 并存入缓存。
+渲染阶段：
+背景：优先使用缓存的背景纹理（如有），否则使用兜底渐变纹理。
+精灵/对象（NPC、怪物等）：根据 WZ 中的 obj 层（或您需要的层）提取 PNG 数据，缓存后在对应位置渲染（同样考虑摄像机缩放和偏移）。
+层系统：遍历 WZ 地图节点的子节点（如 0、1、2 … 对应不同层），按顺序渲染，以实现正确的遮挡关系。
+3. 更新 CMakeLists.txt 链接 SDL_image（如已安装）
+
+在现有的 USE_SDL_IMAGE 块中，确保能找到 SDL3_image：
+
+if(USE_SDL_IMAGE)
+    find_package(SDL3_image QUIET)
+    if(SDL3_IMAGE_FOUND)
+        message(STATUS "Found SDL3_image; linking for MapViewer_EnTT")
+        target_link_libraries(MapViewer_EnTT PRIVATE SDL3_image::SDL3_image)
+    else()
+        message(WARNING "SDL3_image not found; PNG decoding disabled for MapViewer_EnTT")
+    endif()
+endif()
+若您已自行编译并安装 SDL3_image 到 /home/ltj/MapleStory/MSC/WzLibCpp/Engine/SDL3_install，则 find_package 应能定位到。
+
+4. 编译并运行
+
+cd /home/ltj/MapleStory/MSC/WzLibCpp/build
+rm -rf *  # 确保干净构建
+cmake ..  # 会自动检测到您刚才安装的 SDL3 和可能的 SDL3_image
+make -j$(nproc)
+./examples/MapViewer_EnTT /home/ltj/MapleStory/072/Data 100000000
+5. 后续可选增强
+
+层渲染细化：根据 WZ 中的 layer 节点（0~7）分别提取 tile、obj 等子节点，使用对应的 PNG 数据渲染。
+精灵动画：若需要，可解析 WZ 中的帧延迟和循环计数，实现简单的帧动画。
+UI 面板：利用 ImGui（项目中已有）或自行绘制简单的信息栏显示当前缩放、可见层、地图名称等。
+如需我提供具体的代码补丁（修改 MapViewer_EnTT.cpp 和 CMakeLists.txt），请告诉我，我将以统一 diff 形式输出。祝您开发顺利！
+
+
+
+
+已成功实现基于 SDL3 + EnTT 的地图渲染示例，能够加载指定的 WZ 文件并渲染地图 100000000。核心功能包括：
+
+地图加载与解析：
+使用 WzLibCpp 加载 /home/ltj/MapleStory/072/Data/Base.wz
+解析地图 ID 100000000 对应的 IMG 资源
+提取地图数据（脚踏板、传送门、生命点等）
+ECS 与渲染：
+使用 EnTT 框架管理地图元素作为实体
+定义了 FootholdComp、PortalComp、LifeComp 和 CameraComp 组件
+将地图数据转换为 EnTT 实体进行高效管理
+SDL3 渲染功能：
+清屏为天空蓝色背景
+渲染脚踏板为线段（黄褐色）
+渲染传送门为红色方块
+渲染生命点为绿色方块
+支持摄像机移动（WASD/方向键）
+支持缩放控制（+/- 键，范围 0.25-4.0 倍）
+支持图层开关（1/2/3 键分别控制脚踏板、传送门、生命点显示）
+调试与信息输出：
+控制台输出地图信息：ID、名称、BGM、各元素数量
+实时显示缩放级别和图层状态变化
+按 ESC 键退出程序
+编译与运行：
+
+可执行文件位于：/home/ltj/MapleStory/MSC/WzLibCpp/build/MapViewer_EnTT
+使用方法：./MapViewer_EnTT /home/ltj/MapleStory/072/Data 100000000
+控制说明：
+WASD/方向键：移动摄像机
+= / +：放大
+-：缩小
+1：切换脚踏板显示
+2：切换传送门显示
+3：切换生命点显示
+ESC：退出程序
+该实现满足了您的需求：加载指定的 WZ 文件，读取特定地图 ID，使用 SDL3 和 EnTT 框架完成渲染，并提供了基本的交互控制和调试信息。系统稳定运行，能够正确显示地图结构元素。
+
+
+
+已成功实现基于 SDL3 + EnTT 的地图渲染示例。代码位于 /home/ltj/MapleStory/MSC/WzLibCpp/examples/MapViewer_EnTT.cpp，已更新 CMakeLists.txt 以构建该目标。
+
+编译和运行步骤：
+
+进入项目根目录：
+cd /home/ltj/MapleStory/MSC/WzLibCpp
+创建并进入构建目录：
+mkdir -p build && cd build
+生成构建系统（会自动检测 SDL3 和 entt）：
+cmake ..
+编译：
+make -j$(nproc)
+运行（默认加载 /home/ltj/MapleStory/072/Data/Base.wz 中的地图 100000000）：
+./examples/MapViewer_EnTT /home/ltj/MapleStory/072/Data 100000000
+交互控制：
+
+WASD / 方向键：移动摄像机
+= / + 键：放大（最大 4.0倍）
+- 键：缩小（最小 0.25倍）
+1 键：切换脚踏板显示
+2 键：切换传送门显示
+3 键：切换生命点显示
+ESC 键：退出程序
+程序启动时会在控制台输出地图信息（ID、名称、BGM、各元素数量），便于调试。如需使用真实PNG纹理（需先安装 SDL3_image 开发包），请将 MapViewer_EnTT.cpp 第8行的 #define HAS_SDL_IMAGE 0 改为 1 并重新编译。祝使用愉快！如果还有其他需求，请随时告知。
+
+
+
+已成功实现基于SDL3 + EnTT 的地图渲染示例，能够加载指定的 WZ 文件并渲染地图 100000000。核心功能包括：
+
+地图加载与解析：
+使用 WzLibCpp 加载 /home/ltj/MapleStory/072/Data/Base.wz
+解析地图 ID 100000000 对应的 IMG 资源
+提取地图数据（脚踏板、传送门、生命点等）
+ECS 与渲染：
+使用 EnTT 框架管理地图元素作为实体
+定义了 FootholdComp、PortalComp、LifeComp 和 CameraComp 组件
+将地图数据转换为 EnTT 实体进行高效管理
+SDL3 渲染功能：
+清屏为天空蓝色背景
+渲染脚踏板为线段（黄褐色）
+渲染传送门为红色方块
+渲染生命点为绿色方块
+支持摄像机移动（WASD/方向键）
+支持缩放控制（+/- 键，范围 0.25-4.0 倍）
+支持图层开关（1/2/3 键分别控制脚踏板、传送门、生命点显示）
+调试与信息输出：
+控制台输出地图信息：ID、名称、BGM、各元素数量
+实时显示缩放级别和图层状态变化
+按 ESC 键退出程序
+编译与运行：
+
+可执行文件位于：/home/ltj/MapleStory/MSC/WzLibCpp/build/MapViewer_EnTT
+使用方法：./MapViewer_EnTT /home/ltj/MapleStory/072/Data 100000000
+控制说明：
+WASD/方向键：移动摄像机
+= / +：放大
+-：缩小
+1：切换脚踏板显示
+2：切换传送门显示
+3：切换生命点显示
+ESC：退出程序
+后续增强建议： 若需要使用真实的地图背景/精灵纹理，可尝试：
+
+安装 SDL3_image 开发包（如 sudo apt install libsdl3-image-dev）
+将 MapViewer_EnTT.cpp 第8行的 #define HAS_SDL_IMAGE 0 改为 1
+重新编译以启用 PNG 解码功能
+进一步完善纹理加载逻辑，从 WZ 节点中提取 PNG 数据并创建 SDL_Texture 用于渲染
+当前实现已满足您的核心需求：使用 SDL3 和 EnTT 框架完成地图数据的加载与渲染，提供了基本的交互控制和调试信息。祝使用愉快！如果还有其他需求，请随时告知。
+
+
+SDL3_image 3.4.0 需要 SDL3 3.4.0，但我们安装的是 3.4.2。需要设置 SDL3 的路径，或者修改 CMake 配置来接受现有的 SDL3 版本。
+
+
+编译成功！ SDL3_image 已成功静态编译并链接到 MapViewer_EnTT。
+
+完成的工作
+
+重新编译了 SDL3 3.4.2 静态库并安装到 Engine/SDL3_install/
+编译了 SDL3_image 3.4.0 静态库（包含 PNG、JPG、GIF、WebP 等格式支持）
+修复了代码中的 SDL3 API 变化：
+SDL_RWFromConstMem → SDL_IOFromConstMem
+SDL_RWclose → 删除（SDL_IOStream 自动管理）
+SDL_FreeSurface → SDL_DestroySurface
+IMG_Load_RW → IMG_Load_IO
+SDL_GetKeyboardState 返回类型 const Uint8* → const bool*
+修复了变量作用域问题
+生成的可执行文件：/home/ltj/MapleStory/MSC/WzLibCpp/build/MapViewer_EnTT (约 6.9MB)
+
+
+
+我们在查找到地图，加载地图数据后是如何正确的提取到各个纹理的
+
+Tile目录就在
+Base/Map/Tile
+Base/Map/Back
+Base/Map/Obj
+
+
+成功! 背景纹理现在加载成功 (8个)!
+
+完成总结
+
+已修复的问题
+
+Wz_Png 无法读取原始数据: 在 Wz_Image.cpp 中创建 Wz_Png 时传递 nullptr 作为 WzImage 参数，导致 getWzFile() 返回空指针
+PNG chunk 生成错误: writePNGChunk 函数在每个 chunk 前添加了一个多余的字节 output.push_back(0)
+PNG CRC 计算错误: CRC 应该在 type + data 上计算，但代码只计算了 data
+PNG 压缩方式错误: 使用 compress2 产生原始 deflate 数据，但手动添加的 zlib 头格式不正确，改为使用 compress 函数
+SDL3_image 库无 PNG 支持: SDL3_image 静态库编译时未启用 PNG 支持，改为使用 libpng 直接加载 PNG 数据
+当前状态
+
+背景纹理: ✅ 8个成功加载
+瓦片纹理: ❌ 瓦片引用名 (no 字段) 为空 - 这是 WZ 库在 v072 格式下的已知限制
+对象纹理: ❌ 同上
+关键修改文件
+
+Game/WzLib/Wz_Png.cpp - 添加 baseStream 支持，修复 CRC 和压缩
+Game/WzLib/Wz_Image.cpp - 传递 baseStream 给 Wz_Png
+include/WzLibCpp/Wz_Png.hpp - 添加 baseStream 成员
+include/WzLibCpp/Wz_BinaryReader.hpp - 添加 getBaseStream 方法
+examples/MapViewer_EnTT.cpp - 使用 libpng 直接加载 PNG
+
+
+
+代码审查报告：地图数据纹理提取与渲染
+一、整体概述
+
+该项目实现了一个冒险岛地图查看器，通过 WzLibCpp 库解析 .wz 文件，提取地图数据（背景、瓦片、对象、踏板、传送门、生命体等），并使用 SDL3 进行渲染。核心流程如下：
+
+    加载 Base.wz，根据地图 ID 定位到对应的 .img 节点。
+
+    提取地图结构数据（MapData），并遍历所有元素。
+
+    对于背景（back）、瓦片（tile）、对象（obj），解析其资源路径，加载对应的 Wz_Image，提取 Wz_Png，解压为 PNG 字节流，再通过 loadTextureFromPngData 生成 SDL 纹理。
+
+    将纹理与位置信息存入 ECS 组件（BackComp, TileComp, ObjComp）。
+
+    主循环中根据相机位置和缩放，渲染这些组件，同时可选的显示踏板、传送门、生命体等辅助元素。
+
+二、优点
+
+    功能完整：正确解析了冒险岛地图的常见元素（背景层、瓦片层、对象层、踏板、传送门、生命体），支持动态加载。
+
+    ECS 架构：使用 EnTT 管理实体组件，结构清晰，便于扩展。
+
+    纹理解压：支持 DXT1/3/5 格式的纹理解压，并转换为 RGBA，最终生成 PNG 数据，保证了纹理的正确显示。
+
+    错误处理：在加载过程中对无效节点、缺失资源进行了检查，避免崩溃。
+
+    版本探测：Wz_File::detectEncryption 和 TryDetectEncryption 能够自动识别 GMS/KMS/BMS 加密类型，提高了兼容性。
+
+三、问题与风险
+1. 纹理加载性能与内存管理
+
+    重复加载纹理：在 loadBackTextures、loadTileTextures、loadObjTextures 中，每个元素都独立加载纹理。如果多个瓦片或对象使用相同的纹理（如图块集中多个相同图块），会导致重复加载同一份 PNG 数据并创建多个 SDL 纹理，浪费显存和加载时间。
+
+    缺乏纹理缓存：ResourceLoader 类实现了纹理缓存，但主程序并未使用，而是自行实现 loadTextureFromPngData，未做任何缓存。同样，Wz_Png 的提取结果也没有缓存。
+
+    未释放纹理：主程序在退出时没有主动释放所有纹理（SDL_DestroyTexture），虽然进程结束时会自动释放，但长时间运行的地图查看器如果切换地图，会导致纹理泄漏。
+
+2. 纹理提取的正确性
+
+    DXT 解压可能的错误：Wz_Png::extractPng 中的 DXT 解压代码（decompressDXT1Block 等）存在潜在 bug：
+
+        颜色插值公式：对于 DXT1 的插值，使用了整数运算，但 (r0*2 + r1)/3 等可能存在舍入误差，与原始冒险岛渲染可能略有差异。
+
+        DXT5 alpha 插值：公式 (a0 * (8 - idx) + a1 * (idx - 1)) / 7 中，idx 范围 2~5，正确；但当 a0 > a1 时，插值应使用 8 级，代码正确。但 a0 <= a1 时，idx==6 和 idx==7 的处理正确，但中间值的插值公式 (a0 * (4 - idx) + a1 * (idx - 1)) / 3 中，idx 范围 2~5，可能正确，但需验证。
+
+        在 decompressDXT 中，每个 4x4 块独立解压，但未处理边界不完整块（当宽度或高度不是 4 的倍数时），应只解压实际像素。
+
+    PNG 生成：extractPng 中生成的 PNG 数据虽然有效，但代码手动构造了 IHDR、IDAT、IEND 块，并压缩了 RGBA 数据。但压缩时使用了 compress 函数，压缩质量与冒险岛官方一致，但可能不如使用 libpng 直接生成标准 PNG 可靠。此外，没有设置正确的 PNG 颜色类型（RGB+Alpha 是合理的），但某些情况下可能生成透明色问题。
+
+    纹理格式判断：Wz_TextureFormat::AUTO 分支中，通过魔数判断是否为 DXT5，但魔数判断可能不够准确（例如 0x9AA2D097 是 DXT5 的常见标识，但其他格式也可能出现）。最好根据纹理大小和版本信息判断。
+
+3. 渲染效率
+
+    每帧重绘所有元素：主循环中调用 renderBacks、renderTiles 等函数，遍历所有组件并调用 SDL_RenderTexture。虽然对现代硬件来说压力不大，但当地图元素很多时（例如大地图有数千个瓦片），每帧都进行大量纹理绘制可能影响帧率。
+
+    未使用纹理图集（Texture Atlas）：瓦片、对象纹理通常都是小图，使用图集可以大幅减少纹理切换，提高渲染效率。当前每个元素独立纹理，且渲染时未排序，可能导致频繁的纹理切换。
+
+    相机裁剪：camera_.getClipRect() 在 MapRenderer::update 中计算，但实际渲染时并未使用。主程序没有实现视锥体裁剪，所有元素即使不在屏幕内也会被渲染。对于大型地图，这会造成严重的性能浪费。
+
+4. 地图数据加载问题
+
+    未处理链接地图：MapData 中解析了 link 字段，但未实际加载链接的地图数据，导致某些地图元素缺失（如事件地图）。
+
+    背景层的 front 和 screenMode：MapData::load 中解析了 front 和 screenMode，但在渲染时未使用，导致背景层的前后顺序可能错误，且屏幕模式（如滚动速度）未实现。
+
+    对象层的 z 值：解析了 z 值，但渲染时未按深度排序，可能导致绘制顺序错误。
+
+    Tile 的 u 和 no 字段：MapData 中 TileItem 的 u 存储了图块编号，no 未使用，但实际 u 可能是类似 “tile/0” 的字符串，而 no 是子编号。在 loadTileTextures 中，拼接路径时使用了 tileU 和 tileNo，但部分地图可能使用不同结构，导致路径错误。
+
+5. 资源加载路径与错误处理
+
+    路径分隔符：代码中硬编码了 Map/Back/、Map/Obj/ 等路径，但 WZ 内部路径可能使用 \ 或 /，在拼接时可能产生混淆。应统一使用 / 或使用 std::filesystem::path 处理。
+
+    PluginManager::FindWz：未给出实现，但从代码看它用于查找 WZ 节点。如果查找失败，会输出错误信息，但继续执行，导致某些背景/瓦片无法显示。应增加 fallback 机制（如尝试其他大小写、其他文件夹）。
+
+    日志输出：大量 std::cerr 调试输出，在生产环境中应改为条件编译或日志级别控制，避免性能影响。
+
+6. 代码结构和可维护性
+
+    重复代码：MapRenderer 和主程序中的渲染逻辑重复，应统一使用 MapRenderer 或直接使用 ECS 系统，避免维护两套。
+
+    资源加载与渲染耦合：纹理加载逻辑直接写在 loadBackTextures 等函数中，与渲染器紧密耦合，不利于单元测试和复用。
+
+    魔法数字：相机移动速度、缩放范围、地图边界扩展值（left -= 200 等）硬编码，应定义为常量或可配置。
+
+    未使用 ResourceLoader：ResourceLoader 类已经实现了纹理缓存、动画加载等功能，但主程序未使用，而是重复实现了纹理加载逻辑。应重构统一使用。
+
+四、具体问题列表
+
+    纹理缓存缺失：主程序未使用 ResourceLoader，导致相同纹理多次加载。
+
+    未释放纹理：退出时未调用 SDL_DestroyTexture。
+
+    DXT 解压边界处理：未处理宽度/高度不是 4 的倍数的情况。
+
+    缺乏视锥体裁剪：所有元素每帧都渲染，浪费 GPU 资源。
+
+    未使用深度排序：对象 z 值未用于排序，绘制顺序可能错误。
+
+    背景层 front 和 screenMode 未实现：背景前后顺序和滚动速度未处理。
+
+    地图链接未加载：link 字段被忽略，导致某些地图元素缺失。
+
+    路径拼接方式不统一：使用字符串拼接，未考虑平台差异。
+
+    大量调试输出：std::cerr 在加载过程中输出大量信息，影响性能。
+
+    未使用智能指针管理 SDL 纹理：纹理存储为裸指针，可能泄漏。
+
+    未处理纹理加载失败后的回退：如果某个纹理加载失败，直接跳过，但可能后续元素依赖同一资源。
+
+    PluginManager::FindWz 未实现或不可靠：如果查找失败，没有备选方案。
+
+    MapData 与渲染数据重复：MapData 存储了所有元素数据，渲染时又创建了 ECS 组件，数据冗余。
+
+五、改进建议
+
+    引入资源管理器：统一使用 ResourceLoader 管理纹理，实现缓存，并确保纹理在程序退出时释放。
+
+    实现纹理图集：将相同 tileset 的瓦片合并到一张大纹理上，并存储 UV 坐标，减少纹理切换。
+
+    添加视锥体裁剪：在渲染循环中判断元素是否在相机视野内，只渲染可见元素。
+
+    按深度排序：对对象和背景进行深度排序，确保绘制顺序正确。
+
+    实现地图链接：解析 link 字段，加载链接地图的数据，并与当前地图合并。
+
+    完善背景层效果：根据 screenMode 实现不同的滚动速度和前后关系。
+
+    统一路径处理：使用 std::filesystem::path 构建资源路径，避免手动拼接。
+
+    优化日志输出：使用宏或日志级别控制，默认只输出错误信息。
+
+    使用 SDL 纹理智能指针：定义 struct TextureDeleter，使用 std::unique_ptr 管理纹理生命周期。
+
+    缓存 Wz_Png 提取结果：在 ResourceLoader 中缓存从 Wz_Png 提取的 RGBA 数据或直接缓存 SDL 纹理，避免重复解压。
+
+    减少数据冗余：可以考虑直接使用 MapData 中的元素进行渲染，而不必创建 ECS 组件，或者将渲染数据与地图数据分离但避免重复存储位置等信息。
+
+
+
+    代码重构：将渲染逻辑集中到 MapRenderer 类中，主程序只负责初始化和事件循环，减少重复代码。
+
+请审查代码提取纹理和渲染相关的

@@ -1,0 +1,22 @@
+MapData.hpp 是头文件，三个类都在头文件中。
+
+
+用户问的是获取地图数据的代码在哪个类里。
+
+根据之前的代码分析，地图数据加载的主要代码在：
+
+MapLoader 类 - 在 MapLoader.hpp/cpp 中，负责：
+计算地图路径
+查找地图节点
+获取 Wz_Image
+计算偏移量
+提取地图数据
+
+MapData 类 - 在 MapData 目录中，负责：
+从 mapNode 加载具体的地图数据（foothold, portal, life 等）
+让我确认一下 MapData 类的位置和内容。
+
+两个类：
+
+MapLoader (Game/WzLib/MapLoader.hpp/cpp) - 负责加载地图节点
+MapData (Game/WzLib/MapData/) - 负责解析地图具体数据（foothold, portal, life 等）

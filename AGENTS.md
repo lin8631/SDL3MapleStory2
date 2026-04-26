@@ -11,6 +11,9 @@
 ## - **音频**: FFmpeg + SDL3 Audio
  - **资源格式**: WZ文件格式（冒险岛资源格式）
 
+ - **本项目基于参考/home/ltj/MapleStory/wc/WzComparerR2/WzComparerR2目录中c#代码翻译实现
+
+
 ## 代码规范
 ## - 使用 `SDL_Log` 输出日志信息
 ## - 错误信息使用 `SDL_LogWarn` 或 `SDL_LogError`
@@ -80,12 +83,12 @@
 4. Foothold, Portal, Life
 
 ## Relevant files / directories
-- `/home/ltj/MapleStory/MapleStoryW/examples/MapViewer_EnTT.cpp` - 主程序文件
-- `/home/ltj/MapleStory/MapleStoryW/Game/MapRender/src/MapRenderer.cpp` - MapRenderer 实现
-- `/home/ltj/MapleStory/MapleStoryW/Game/MapRender/src/ResourceLoader.cpp` - ResourceLoader 实现
-- `/home/ltj/MapleStory/MapleStoryW/Game/MapRender/src/MapData.cpp` - MapRenderData 加载实现
-- `/home/ltj/MapleStory/MapleStoryW/Engine/Scene/include/MapScene.hpp` - ObjItem/BackItem 结构定义
-- `/home/ltj/MapleStory/MapleStoryW/build/MapViewer_EnTT` - 编译后的可执行文件
+/examples/MapViewer_EnTT.cpp` - 主程序文件
+/Game/MapRender/src/MapRenderer.cpp` - MapRenderer 实现
+/Game/MapRender/src/ResourceLoader.cpp` - ResourceLoader 实现
+/Game/MapRender/src/MapData.cpp` - MapRenderData 加载实现
+/Engine/Scene/include/MapScene.hpp` - ObjItem/BackItem 结构定义
+/build/MapViewer_EnTT` - 编译后的可执行文件
 
 ## Next steps
 1. ✅ 纹理加载和渲染功能已完成

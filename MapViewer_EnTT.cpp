@@ -123,6 +123,10 @@ public:
     bool prevZoomIn = false, prevZoomOut = false;
     bool prev1 = false, prev2 = false, prev3 = false;
     bool prev4 = false, prev5 = false, prev6 = false;
+    bool showDebugWindow = true;
+    
+    // 已加载的WZ文件列表
+    std::vector<std::shared_ptr<Wz_File>> wzFiles;
     
 private:
     // 私有辅助方法
@@ -310,6 +314,7 @@ bool AppState::initialize(int windowWidth, int windowHeight) {
         return false;
     }
     structure = loadResult.structure;
+    wzFiles = structure->getWzFiles();
 
     // 注册 WZ 结构管理器到全局插件系统
     PluginBase::PluginManager::RegisterStructures({structure});
@@ -447,6 +452,10 @@ bool AppState::handleEvent(SDL_Event* event) {
         if (event->key.scancode == SDL_SCANCODE_ESCAPE) {
             return false;
         }
+        // Tab键切换调试窗口
+        else if (event->key.scancode == SDL_SCANCODE_TAB) {
+            showDebugWindow = !showDebugWindow;
+        }
     }
     return true; // 继续运行
 }
@@ -519,13 +528,14 @@ void AppState::render() {
 
     // 创建调试窗口
     static bool show_tree_window = true;
+    show_tree_window = showDebugWindow;
     if (show_tree_window) {
         ImGui::Begin("WZ 资源浏览器", &show_tree_window, ImGuiWindowFlags_MenuBar);
 
         // 菜单栏
         if (ImGui::BeginMenuBar()) {
             if (ImGui::BeginMenu("视图")) {
-                ImGui::MenuItem("资源浏览器", nullptr, &show_tree_window);
+                ImGui::MenuItem("资源浏览器", "Tab", &showDebugWindow);
                 ImGui::EndMenu();
             }
             ImGui::EndMenuBar();
@@ -540,10 +550,18 @@ void AppState::render() {
         // 第一列：WZ文件列表
         ImGui::SetNextItemOpen(true, ImGuiCond_Once);
         if (ImGui::TreeNode("WZ 文件列表")) {
-            ImGui::Text("Map.wz");
-            ImGui::Text("Character.wz");
-            ImGui::Text("Item.wz");
-            ImGui::Text("... 共 %d 个文件", 16);
+            if (!wzFiles.empty()) {
+                for (size_t i = 0; i < wzFiles.size() && i < 20; i++) {
+                    if (wzFiles[i] && wzFiles[i]->getHeader()) {
+                        ImGui::Text("%s", wzFiles[i]->getHeader()->getFileName().c_str());
+                    }
+                }
+                if (wzFiles.size() > 20) {
+                    ImGui::Text("... 共 %zu 个文件", wzFiles.size());
+                }
+            } else {
+                ImGui::Text("无加载的WZ文件");
+            }
             ImGui::TreePop();
         }
 

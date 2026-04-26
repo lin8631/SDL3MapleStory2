@@ -550,6 +550,30 @@ void AppState::render() {
         // 第一列：WZ文件列表
         ImGui::SetNextItemOpen(true, ImGuiCond_Once);
         if (ImGui::TreeNode("WZ 文件列表")) {
+            std::function<void(std::shared_ptr<Wz_Node>, int)> renderWzNode = 
+            [&](std::shared_ptr<Wz_Node> node, int depth) {
+                if (!node || depth > 4) return;
+                auto nodes = node->getNodes();
+                if (nodes && nodes->getCount() > 0) {
+                    int maxItems = (depth == 0) ? 20 : (depth == 1) ? 30 : (depth == 2) ? 20 : 10;
+                    for (size_t i = 0; i < nodes->getCount() && i < maxItems; i++) {
+                        auto child = (*nodes)[i];
+                        if (child) {
+                            std::string text = child->getText();
+                            auto childNodes = child->getNodes();
+                            if (childNodes && childNodes->getCount() > 0) {
+                                if (ImGui::TreeNode(text.c_str())) {
+                                    renderWzNode(child, depth + 1);
+                                    ImGui::TreePop();
+                                }
+                            } else {
+                                ImGui::Text("%s", text.c_str());
+                            }
+                        }
+                    }
+                }
+            };
+            
             if (!wzFiles.empty()) {
                 for (size_t i = 0; i < wzFiles.size() && i < 20; i++) {
                     if (wzFiles[i] && wzFiles[i]->getHeader()) {
@@ -558,27 +582,7 @@ void AppState::render() {
                         auto wzNode = wzFiles[i]->getNode();
                         if (wzNode && wzNode->getNodes() && wzNode->getNodes()->getCount() > 0) {
                             if (ImGui::TreeNode(fileName.c_str())) {
-                                auto nodes = wzNode->getNodes();
-                                for (size_t j = 0; j < nodes->getCount() && j < 30; j++) {
-                                    auto child = (*nodes)[j];
-                                    if (child) {
-                                        std::string text = child->getText();
-                                        auto childNodes = child->getNodes();
-                                        if (childNodes && childNodes->getCount() > 0) {
-                                            if (ImGui::TreeNode(text.c_str())) {
-                                                for (size_t k = 0; k < childNodes->getCount() && k < 20; k++) {
-                                                    auto leaf = (*childNodes)[k];
-                                                    if (leaf) {
-                                                        ImGui::Text("%s", leaf->getText().c_str());
-                                                    }
-                                                }
-                                                ImGui::TreePop();
-                                            }
-                                        } else {
-                                            ImGui::Text("%s", text.c_str());
-                                        }
-                                    }
-                                }
+                                renderWzNode(wzNode, 0);
                                 ImGui::TreePop();
                             }
                         } else {

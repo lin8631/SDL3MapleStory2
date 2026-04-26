@@ -127,6 +127,11 @@ public:
     
     // 已加载的WZ文件列表
     std::vector<std::shared_ptr<Wz_File>> wzFiles;
+    int loadedMapID = 100000000;
+    
+    // 选中节点
+    std::shared_ptr<Wz_Node> selectedNode;
+    std::string selectedNodeTitle = "";
     
 private:
     // 私有辅助方法
@@ -325,6 +330,7 @@ bool AppState::initialize(int windowWidth, int windowHeight) {
     // 使用MapLoader加载地图
     MapLoader loader(structure);
     mapNode = loader.loadMap(mapID);
+    loadedMapID = mapID;  // 同步到成员变量
 
     if (!mapNode) {
         std::cerr << "地图加载失败: " << loader.getLastError() << std::endl;
@@ -549,9 +555,9 @@ void AppState::render() {
 
         // 第一列：WZ文件列表
         ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-        if (ImGui::TreeNode("WZ 文件列表")) {
-            std::function<void(std::shared_ptr<Wz_Node>, int)> renderWzNode = 
-            [&](std::shared_ptr<Wz_Node> node, int depth) {
+        if (ImGui::TreeNode("WZ Files")) {
+            std::function<void(std::shared_ptr<Wz_Node>, int, std::string)> renderWzNode = 
+            [&](std::shared_ptr<Wz_Node> node, int depth, std::string path) {
                 if (!node || depth > 4) return;
                 auto nodes = node->getNodes();
                 if (nodes && nodes->getCount() > 0) {
@@ -560,14 +566,33 @@ void AppState::render() {
                         auto child = (*nodes)[i];
                         if (child) {
                             std::string text = child->getText();
+                            std::string childPath = path + "/" + text;
                             auto childNodes = child->getNodes();
                             if (childNodes && childNodes->getCount() > 0) {
                                 if (ImGui::TreeNode(text.c_str())) {
-                                    renderWzNode(child, depth + 1);
+                                    renderWzNode(child, depth + 1, childPath);
                                     ImGui::TreePop();
                                 }
                             } else {
-                                ImGui::Text("%s", text.c_str());
+                                // img节点可选中
+                                auto wzImg = child->getWzImage();
+                                bool isSelected = (selectedNode == child);
+                                if (ImGui::Selectable(text.c_str(), isSelected, ImGuiSelectableFlags_None)) {
+                                    if (wzImg) {
+                                        wzImg->tryExtract();
+                                        auto extractedNode = wzImg->getNode();
+                                        if (extractedNode) {
+                                            selectedNode = extractedNode;
+                                            selectedNodeTitle = childPath;
+                                        } else {
+                                            selectedNode = child;
+                                            selectedNodeTitle = childPath;
+                                        }
+                                    } else {
+                                        selectedNode = child;
+                                        selectedNodeTitle = childPath;
+                                    }
+                                }
                             }
                         }
                     }
@@ -575,77 +600,93 @@ void AppState::render() {
             };
             
             if (!wzFiles.empty()) {
-                for (size_t i = 0; i < wzFiles.size() && i < 20; i++) {
-                    if (wzFiles[i] && wzFiles[i]->getHeader()) {
-                        std::string fullPath = wzFiles[i]->getHeader()->getFileName();
-                        std::string fileName = std::filesystem::path(fullPath).filename().string();
-                        auto wzNode = wzFiles[i]->getNode();
-                        if (wzNode && wzNode->getNodes() && wzNode->getNodes()->getCount() > 0) {
-                            if (ImGui::TreeNode(fileName.c_str())) {
-                                renderWzNode(wzNode, 0);
-                                ImGui::TreePop();
-                            }
-                        } else {
-                            ImGui::Text("%s", fileName.c_str());
+                int shown = 0;
+                for (size_t i = 0; i < wzFiles.size() && shown < 20; i++) {
+                    if (!wzFiles[i] || !wzFiles[i]->getHeader()) continue;
+                    // 跳过作为子目录加载的WZ文件
+                    if (wzFiles[i]->getIsSubDir()) continue;
+                    
+                    std::string fullPath = wzFiles[i]->getHeader()->getFileName();
+                    std::string fileName = std::filesystem::path(fullPath).filename().string();
+                    
+                    auto wzNode = wzFiles[i]->getNode();
+                    if (wzNode && wzNode->getNodes() && wzNode->getNodes()->getCount() > 0) {
+                        if (ImGui::TreeNode(fileName.c_str())) {
+                            renderWzNode(wzNode, 0, fileName);
+                            ImGui::TreePop();
                         }
+                    } else {
+                        ImGui::Text("%s", fileName.c_str());
                     }
+                    shown++;
                 }
-                if (wzFiles.size() > 20) {
-                    ImGui::Text("... 共 %zu 个文件", wzFiles.size());
-                }
+                ImGui::Text("... Total: %zu files (%d shown)", wzFiles.size(), shown);
             } else {
-                ImGui::Text("无加载的WZ文件");
+                ImGui::Text("No WZ files loaded");
             }
             ImGui::TreePop();
         }
 
         ImGui::NextColumn();
 
-        // 第二列：地图节点
-        ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-        if (ImGui::TreeNode("地图节点")) {
-            if (mapNode && mapNode->getNodes()) {
-                std::function<void(std::shared_ptr<Wz_Node>, int)> renderMapNode = 
-                [&](std::shared_ptr<Wz_Node> node, int depth) {
-                    if (!node || depth > 2) return;
-                    auto nodes = node->getNodes();
-                    if (nodes && nodes->getCount() > 0) {
-                        for (size_t i = 0; i < nodes->getCount() && i < 50; i++) {
-                            auto child = (*nodes)[i];
-                            if (child) {
-                                std::string text = child->getText();
-                                auto childNodes = child->getNodes();
-                                if (childNodes && childNodes->getCount() > 0) {
-                                    if (ImGui::TreeNode(text.c_str())) {
-                                        renderMapNode(child, depth + 1);
-                                        ImGui::TreePop();
+        // 第二列：选中节点的内容
+        {
+            char title[64];
+            if (selectedNodeTitle.empty()) {
+                snprintf(title, sizeof(title), "Map\\%d.img", loadedMapID);
+            } else {
+                snprintf(title, sizeof(title), "%s", selectedNodeTitle.c_str());
+            }
+            ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+            if (ImGui::TreeNode(title)) {
+                auto displayNode = selectedNode ? selectedNode : mapNode;
+                if (displayNode && displayNode->getNodes()) {
+                    std::function<void(std::shared_ptr<Wz_Node>, int)> renderWzNode = 
+                    [&](std::shared_ptr<Wz_Node> node, int depth) {
+                        if (!node || depth > 4) return;
+                        auto nodes = node->getNodes();
+                        if (nodes && nodes->getCount() > 0) {
+                            int maxItems = (depth == 0) ? 50 : (depth == 1) ? 30 : (depth == 2) ? 20 : 10;
+                            for (size_t i = 0; i < nodes->getCount() && i < maxItems; i++) {
+                                auto child = (*nodes)[i];
+                                if (child) {
+                                    std::string text = child->getText();
+                                    auto childNodes = child->getNodes();
+                                    if (childNodes && childNodes->getCount() > 0) {
+                                        if (ImGui::TreeNode(text.c_str())) {
+                                            renderWzNode(child, depth + 1);
+                                            ImGui::TreePop();
+                                        }
+                                    } else {
+                                        ImGui::Text("%s", text.c_str());
                                     }
-                                } else {
-                                    ImGui::Text("%s", text.c_str());
                                 }
                             }
                         }
-                    }
-                };
-                renderMapNode(mapNode, 0);
+                    };
+                    renderWzNode(displayNode, 0);
+                }
+ImGui::TreePop();
             }
-            ImGui::TreePop();
         }
 
         ImGui::NextColumn();
 
         // 第三列：渲染信息
         ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-        if (ImGui::TreeNode("渲染信息")) {
+        if (ImGui::TreeNode("Render Info")) {
             ImGui::Text("Zoom: %.2f", mapRenderer->getZoom());
             CameraComp& camComp = registry.get<CameraComp>(cameraEntity);
             ImGui::Text("Camera: (%d, %d)", camComp.x, camComp.y);
             auto mapData = mapRenderer->getMapData();
+            ImGui::Text("Show Foothold: %s", mapData->showFoothold ? "Yes" : "No");
+            ImGui::Text("Show Portal: %s", mapData->showPortal ? "Yes" : "No");
+            ImGui::Text("Show Life: %s", mapData->showLife ? "Yes" : "No");
             ImGui::Text("Show Back: %s", mapData->showBack ? "Yes" : "No");
             ImGui::Text("Show Tile: %s", mapData->showTile ? "Yes" : "No");
             ImGui::Text("Show Obj: %s", mapData->showObj ? "Yes" : "No");
-            ImGui::Text("背景: %d, 瓦片: %d, 对象: %d", 
-                        static_cast<int>(mapData->backs.size()), static_cast<int>(mapData->tiles.size()), static_cast<int>(mapData->objs.size()));
+            ImGui::Text("Back: %zu, Tile: %zu, Obj: %zu", 
+                        mapData->backs.size(), mapData->tiles.size(), mapData->objs.size());
             ImGui::TreePop();
         }
 
@@ -660,9 +701,10 @@ void AppState::render() {
 }
 
 void AppState::cleanup() {
-    // 清理纹理缓存
+    // 清理纹理缓存（在clear之前记录数量）
+    size_t textureCount = TextureCache::getInstance().size();
     TextureCache::getInstance().clear();
-    std::cout << "[MapViewer_EnTT(AppState::cleanup)]: 纹理缓存已清理，共释放 " << TextureCache::getInstance().size() << " 个纹理" << std::endl;
+    std::cout << "[MapViewer_EnTT(AppState::cleanup)]: Texture cache cleared, released " << textureCount << " textures" << std::endl;
 
     // 关闭ImGui
     ImGui_ImplSDLRenderer3_Shutdown();

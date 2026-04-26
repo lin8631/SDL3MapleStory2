@@ -553,7 +553,37 @@ void AppState::render() {
             if (!wzFiles.empty()) {
                 for (size_t i = 0; i < wzFiles.size() && i < 20; i++) {
                     if (wzFiles[i] && wzFiles[i]->getHeader()) {
-                        ImGui::Text("%s", wzFiles[i]->getHeader()->getFileName().c_str());
+                        std::string fullPath = wzFiles[i]->getHeader()->getFileName();
+                        std::string fileName = std::filesystem::path(fullPath).filename().string();
+                        auto wzNode = wzFiles[i]->getNode();
+                        if (wzNode && wzNode->getNodes() && wzNode->getNodes()->getCount() > 0) {
+                            if (ImGui::TreeNode(fileName.c_str())) {
+                                auto nodes = wzNode->getNodes();
+                                for (size_t j = 0; j < nodes->getCount() && j < 30; j++) {
+                                    auto child = (*nodes)[j];
+                                    if (child) {
+                                        std::string text = child->getText();
+                                        auto childNodes = child->getNodes();
+                                        if (childNodes && childNodes->getCount() > 0) {
+                                            if (ImGui::TreeNode(text.c_str())) {
+                                                for (size_t k = 0; k < childNodes->getCount() && k < 20; k++) {
+                                                    auto leaf = (*childNodes)[k];
+                                                    if (leaf) {
+                                                        ImGui::Text("%s", leaf->getText().c_str());
+                                                    }
+                                                }
+                                                ImGui::TreePop();
+                                            }
+                                        } else {
+                                            ImGui::Text("%s", text.c_str());
+                                        }
+                                    }
+                                }
+                                ImGui::TreePop();
+                            }
+                        } else {
+                            ImGui::Text("%s", fileName.c_str());
+                        }
                     }
                 }
                 if (wzFiles.size() > 20) {

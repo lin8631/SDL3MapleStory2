@@ -113,6 +113,7 @@ public:
     // 已加载的WZ文件列表
     std::vector<std::shared_ptr<Wz_File>> wzFiles;
     int loadedMapID = 100000000;
+    std::string wzPath = "/home/ltj/MapleStory/072/Data";
     
     // 选中节点
     std::shared_ptr<Wz_Node> selectedNode;
@@ -221,19 +222,45 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result);
  * 6. 创建EnTT实体和组件
  * 7. 加载纹理资源
  */
-SDL_AppResult SDL_AppInit(void** appstate, int /*argc*/, char* /*argv*/[]) {
+SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     // 获取应用状态单例
     AppState* app = &AppState::getInstance();
     *appstate = app;    // 返回给SDL
 
     std::cout << "[MapViewer_EnTT(SDL_AppInit)]: MapViewer_EnTT PNG纹理渲染 (SDL_MAIN_USE_CALLBACKS)" << std::endl;
 
+    // 解析命令行参数
+    std::string wzPath = "/home/ltj/MapleStory/072/Data";
+    int mapID = 100000000;
+    
+    for (int i = 1; i < argc; i++) {
+        if (argv[i][0] != '-' && argv[i][0] != '/') {
+            // 尝试解析为地图ID
+            try {
+                mapID = std::stoi(argv[i]);
+            } catch (...) {
+                // 如果不是数字，可能是路径
+                wzPath = argv[i];
+            }
+        } else if (strcmp(argv[i], "-path") == 0 || strcmp(argv[i], "--path") == 0) {
+            if (i + 1 < argc) wzPath = argv[++i];
+        } else if (strcmp(argv[i], "-map") == 0 || strcmp(argv[i], "--map") == 0) {
+            if (i + 1 < argc) mapID = std::stoi(argv[++i]);
+        }
+    }
+    
+    app->wzPath = wzPath;
+    app->loadedMapID = mapID;
+
     // 调用 AppState 的初始化方法
     if (!app->initialize(1068, 600)) {
         return SDL_APP_FAILURE;
     }
 
-    std::cout << "按 WASD/方向键移动，ESC 退出，+/- 调整缩放" << std::endl;
+    std::cout << "Usage: MapViewer_EnTT [path] [mapid] [-path <path>] [-map <id>]" << std::endl;
+    std::cout << "  Default path: " << wzPath << std::endl;
+    std::cout << "  Default map: " << mapID << std::endl;
+    std::cout << "WASD/方向键移动，ESC 退出，+/- 调整缩放" << std::endl;
     std::cout << "4=切换背景, 5=切换瓦片, 6=切换对象, 1/2/3=切换其他元素" << std::endl;
     std::cout << "============================================" << std::endl;
 
@@ -310,8 +337,7 @@ bool AppState::initialize(int windowWidth, int windowHeight) {
 
     std::cout << "[MapViewer_EnTT(AppState::initialize)]: 初始化应用程序..." << std::endl;
 
-    std::string wzPath = "/home/ltj/MapleStory/072/Data";  // WZ文件所在目录
-    int mapID = 100000000;   // 地图ID
+    std::cout << "加载 WZ 路径: " << wzPath << ", 地图ID: " << loadedMapID << std::endl;
 
     // 使用WzResourceLoader加载所有WZ文件
     auto loadResult = WzResourceLoader::loadFromDirectory(wzPath, true);
@@ -330,8 +356,7 @@ bool AppState::initialize(int windowWidth, int windowHeight) {
 
     // 使用MapLoader加载地图
     MapLoader loader(structure);
-    mapNode = loader.loadMap(mapID);
-    loadedMapID = mapID;  // 同步到成员变量
+    mapNode = loader.loadMap(loadedMapID);
 
     if (!mapNode) {
         std::cerr << "地图加载失败: " << loader.getLastError() << std::endl;

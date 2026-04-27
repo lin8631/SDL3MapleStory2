@@ -646,32 +646,45 @@ void AppState::render() {
                     };
                     
                     if (!wzFiles.empty()) {
-                        size_t totalFiles = wzFiles.size();
-                        size_t maxFiles = 20;
-                        int shown = 0;
-                        for (size_t i = 0; i < totalFiles && shown < (int)maxFiles; i++) {
-                            if (!wzFiles[i] || !wzFiles[i]->getHeader()) continue;
-                            if (wzFiles[i]->getIsSubDir()) continue;
-                            
-                            std::string fullPath = wzFiles[i]->getHeader()->getFileName();
-                            std::string fileName = std::filesystem::path(fullPath).filename().string();
-                            
-                            ImGui::PushID((void*)wzFiles[i].get());
-                            auto wzNode = wzFiles[i]->getNode();
-                            bool hasChildren = wzNode && wzNode->getNodes() && wzNode->getNodes()->getCount() > 0;
-                            if (hasChildren) {
-                                if (ImGui::TreeNode((void*)wzFiles[i].get(), "%s", fileName.c_str())) {
-                                    renderWzNode(wzNode, 0, fileName);
-                                    ImGui::TreePop();
-                                }
-                            } else {
-                                ImGui::Text("%s", fileName.c_str());
+                        // 优先使用 base.wz 的根节点渲染树
+                        auto baseNode = structure->getWzNode();
+                        if (baseNode && baseNode->getNodes() && baseNode->getNodes()->getCount() > 0) {
+                            std::string rootName = "base.wz";
+                            ImGui::PushID((void*)baseNode.get());
+                            if (ImGui::TreeNode((void*)baseNode.get(), "%s", rootName.c_str())) {
+                                renderWzNode(baseNode, 0, rootName);
+                                ImGui::TreePop();
                             }
                             ImGui::PopID();
-                            shown++;
-                        }
-                        if (totalFiles > (size_t)shown) {
-                            ImGui::TextColored(ImVec4(1, 0.5, 0, 1), "... +%zu more files", totalFiles - shown);
+                        } else {
+                            // 没有 base.wz，遍历 wzFiles 列表
+                            size_t totalFiles = wzFiles.size();
+                            size_t maxFiles = 20;
+                            int shown = 0;
+                            for (size_t i = 0; i < totalFiles && shown < (int)maxFiles; i++) {
+                                if (!wzFiles[i] || !wzFiles[i]->getHeader()) continue;
+                                if (wzFiles[i]->getIsSubDir()) continue;
+                                
+                                std::string fullPath = wzFiles[i]->getHeader()->getFileName();
+                                std::string fileName = std::filesystem::path(fullPath).filename().string();
+                                
+                                ImGui::PushID((void*)wzFiles[i].get());
+                                auto wzNode = wzFiles[i]->getNode();
+                                bool hasChildren = wzNode && wzNode->getNodes() && wzNode->getNodes()->getCount() > 0;
+                                if (hasChildren) {
+                                    if (ImGui::TreeNode((void*)wzFiles[i].get(), "%s", fileName.c_str())) {
+                                        renderWzNode(wzNode, 0, fileName);
+                                        ImGui::TreePop();
+                                    }
+                                } else {
+                                    ImGui::Text("%s", fileName.c_str());
+                                }
+                                ImGui::PopID();
+                                shown++;
+                            }
+                            if (totalFiles > (size_t)shown) {
+                                ImGui::TextColored(ImVec4(1, 0.5, 0, 1), "... +%zu more files", totalFiles - shown);
+                            }
                         }
                     } else {
                         ImGui::Text("No WZ files loaded");

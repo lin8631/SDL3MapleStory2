@@ -565,15 +565,13 @@ void AppState::render() {
         } else {
             // 三列布局
             if (ImGui::BeginTable("trees", 3, ImGuiTableFlags_Resizable | ImGuiTableFlags_NoKeepColumnsVisible)) {
-                ImGui::TableSetupColumn("WZ Files", ImGuiTableColumnFlags_WidthFixed, 250.0f);
-                ImGui::TableSetupColumn("Selected Node", ImGuiTableColumnFlags_WidthFixed, 250.0f);
-                ImGui::TableSetupColumn("Render Info", ImGuiTableColumnFlags_WidthFixed, 250.0f);
-                ImGui::TableHeadersRow();
+                ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 250.0f);
+                ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 250.0f);
+                ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 250.0f);
 
                 // 第一列：WZ文件列表
                 ImGui::TableNextColumn();
-                ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-                if (ImGui::TreeNode("WZ Files")) {
+                {
                     std::function<void(std::shared_ptr<Wz_Node>, int, std::string)> renderWzNode = 
                     [&](std::shared_ptr<Wz_Node> node, int depth, std::string path) {
                         if (!node || depth > 6) return;
@@ -680,23 +678,14 @@ void AppState::render() {
                     } else {
                         ImGui::Text("No WZ files loaded");
                     }
-                    ImGui::TreePop();
                 }
 
                 // 第二列：选中节点的内容
                 ImGui::TableNextColumn();
                 {
-                    std::string title;
-                    if (selectedNodeTitle.empty()) {
-                        title = "Map\\" + std::to_string(loadedMapID) + ".img";
-                    } else {
-                        title = selectedNodeTitle;
-                    }
-                    ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-                    if (ImGui::TreeNode(title.c_str())) {
-                        auto displayNode = selectedNode ? selectedNode : mapNode;
-                        if (displayNode && displayNode->getNodes()) {
-                            std::function<void(std::shared_ptr<Wz_Node>, int)> renderWzNode2 = 
+                    auto displayNode = selectedNode ? selectedNode : mapNode;
+                    if (displayNode && displayNode->getNodes()) {
+                        std::function<void(std::shared_ptr<Wz_Node>, int)> renderWzNode2 = 
                             [&](std::shared_ptr<Wz_Node> node, int depth) {
                                 if (!node || depth > 6) return;
                                 auto nodes = node->getNodes();
@@ -740,28 +729,22 @@ void AppState::render() {
                             };
                             renderWzNode2(displayNode, 0);
                         }
-                        ImGui::TreePop();
-                    }
                 }
 
                 // 第三列：渲染信息
                 ImGui::TableNextColumn();
-                ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-                if (ImGui::TreeNode("Render Info")) {
-                    ImGui::Text("Zoom: %.2f", ownedMapRenderer->getZoom());
-                    CameraComp& camComp = registry.get<CameraComp>(cameraEntity);
-                    ImGui::Text("Camera: (%d, %d)", camComp.x, camComp.y);
-                    auto mapRenderData = ownedMapRenderer->getMapData();
-                    ImGui::Text("Show Foothold: %s", mapRenderData->showFoothold ? "Yes" : "No");
-                    ImGui::Text("Show Portal: %s", mapRenderData->showPortal ? "Yes" : "No");
-                    ImGui::Text("Show Life: %s", mapRenderData->showLife ? "Yes" : "No");
-                    ImGui::Text("Show Back: %s", mapRenderData->showBack ? "Yes" : "No");
-                    ImGui::Text("Show Tile: %s", mapRenderData->showTile ? "Yes" : "No");
-                    ImGui::Text("Show Obj: %s", mapRenderData->showObj ? "Yes" : "No");
-                    ImGui::Text("Back: %zu, Tile: %zu, Obj: %zu", 
-                                mapRenderData->backs.size(), mapRenderData->tiles.size(), mapRenderData->objs.size());
-                    ImGui::TreePop();
-                }
+                ImGui::Text("Zoom: %.2f", ownedMapRenderer->getZoom());
+                CameraComp& camComp = registry.get<CameraComp>(cameraEntity);
+                ImGui::Text("Camera: (%d, %d)", camComp.x, camComp.y);
+                auto mapRenderData = ownedMapRenderer->getMapData();
+                ImGui::Text("Show Foothold: %s", mapRenderData->showFoothold ? "Yes" : "No");
+                ImGui::Text("Show Portal: %s", mapRenderData->showPortal ? "Yes" : "No");
+                ImGui::Text("Show Life: %s", mapRenderData->showLife ? "Yes" : "No");
+                ImGui::Text("Show Back: %s", mapRenderData->showBack ? "Yes" : "No");
+                ImGui::Text("Show Tile: %s", mapRenderData->showTile ? "Yes" : "No");
+                ImGui::Text("Show Obj: %s", mapRenderData->showObj ? "Yes" : "No");
+                ImGui::Text("Back: %zu, Tile: %zu, Obj: %zu", 
+                            mapRenderData->backs.size(), mapRenderData->tiles.size(), mapRenderData->objs.size());
 
                 ImGui::EndTable();
             }

@@ -599,33 +599,34 @@ void AppState::render() {
                                 std::string text = child->getText();
                                 std::string childPath = path + "/" + text;
                                 auto childNodes = child->getNodes();
+                                auto wzImg = child->getWzImage();
+                                
+                                bool hasChildNodes = childNodes && childNodes->getCount() > 0;
+                                bool isWzImage = wzImg != nullptr;
+                                bool canExpand = hasChildNodes || isWzImage;
                                 
                                 ImGui::PushID((void*)child.get());
-                                bool hasChildren = childNodes && childNodes->getCount() > 0;
-                                
-                                if (hasChildren) {
-                                    if (ImGui::TreeNode(text.c_str())) {
+                                if (canExpand) {
+                                    if (ImGui::TreeNode((void*)child.get(), "%s", text.c_str())) {
+                                        if (isWzImage && !hasChildNodes) {
+                                            if (wzImg->tryExtract()) {
+                                                auto extractedNode = wzImg->getNode();
+                                                if (extractedNode) {
+                                                    renderWzNode(extractedNode, depth + 1, childPath);
+                                                    ImGui::TreePop();
+                                                    ImGui::PopID();
+                                                    continue;
+                                                }
+                                            }
+                                        }
                                         renderWzNode(child, depth + 1, childPath);
                                         ImGui::TreePop();
                                     }
                                 } else {
-                                    auto wzImg = child->getWzImage();
                                     bool isSelected = (selectedNode == child);
                                     if (ImGui::Selectable(text.c_str(), isSelected, ImGuiSelectableFlags_None)) {
-                                        if (wzImg) {
-                                            wzImg->tryExtract();
-                                            auto extractedNode = wzImg->getNode();
-                                            if (extractedNode) {
-                                                selectedNode = extractedNode;
-                                                selectedNodeTitle = childPath;
-                                            } else {
-                                                selectedNode = child;
-                                                selectedNodeTitle = childPath;
-                                            }
-                                        } else {
-                                            selectedNode = child;
-                                            selectedNodeTitle = childPath;
-                                        }
+                                        selectedNode = child;
+                                        selectedNodeTitle = childPath;
                                     }
                                 }
                                 ImGui::PopID();
@@ -650,8 +651,9 @@ void AppState::render() {
                             
                             ImGui::PushID((void*)wzFiles[i].get());
                             auto wzNode = wzFiles[i]->getNode();
-                            if (wzNode && wzNode->getNodes() && wzNode->getNodes()->getCount() > 0) {
-                                if (ImGui::TreeNode(fileName.c_str())) {
+                            bool hasChildren = wzNode && wzNode->getNodes() && wzNode->getNodes()->getCount() > 0;
+                            if (hasChildren) {
+                                if (ImGui::TreeNode((void*)wzFiles[i].get(), "%s", fileName.c_str())) {
                                     renderWzNode(wzNode, 0, fileName);
                                     ImGui::TreePop();
                                 }
@@ -698,12 +700,26 @@ void AppState::render() {
                                         
                                         std::string text = child->getText();
                                         auto childNodes = child->getNodes();
+                                        auto wzImg = child->getWzImage();
+                                        
+                                        bool hasChildNodes = childNodes && childNodes->getCount() > 0;
+                                        bool isWzImage = wzImg != nullptr;
+                                        bool canExpand = hasChildNodes || isWzImage;
                                         
                                         ImGui::PushID((void*)child.get());
-                                        bool hasChildren = childNodes && childNodes->getCount() > 0;
-                                        
-                                        if (hasChildren) {
-                                            if (ImGui::TreeNode(text.c_str())) {
+                                        if (canExpand) {
+                                            if (ImGui::TreeNode((void*)child.get(), "%s", text.c_str())) {
+                                                if (isWzImage && !hasChildNodes) {
+                                                    if (wzImg->tryExtract()) {
+                                                        auto extractedNode = wzImg->getNode();
+                                                        if (extractedNode) {
+                                                            renderWzNode2(extractedNode, depth + 1);
+                                                            ImGui::TreePop();
+                                                            ImGui::PopID();
+                                                            continue;
+                                                        }
+                                                    }
+                                                }
                                                 renderWzNode2(child, depth + 1);
                                                 ImGui::TreePop();
                                             }

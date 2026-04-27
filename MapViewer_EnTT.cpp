@@ -8,7 +8,6 @@
 #include <filesystem>       // C++17文件系统操作(std::filesystem::path)
 #include <cstring>          // C字符串操作(memcpy, memset)
 #include <cstdio>           // C标准输入输出(printf, sprintf)
-#include <unistd.h>         // UNIX标准函数(access, getcwd)
 
 // SDL3图形库头文件
 #include <SDL3/SDL.h>          // SDL核心库 - 窗口、渲染器、事件
@@ -90,7 +89,6 @@ public:
     SDL_Window* getWindow() const { return window; }
     SDL_Renderer* getRenderer() const { return renderer; }
     entt::registry& getRegistry() { return registry; }
-    MapRenderer* getMapRenderer() { return mapRenderer; }
     
     // 成员变量
     SDL_Window* window = nullptr;
@@ -102,7 +100,6 @@ public:
     int mapWidth = 1068;
     int mapHeight = 600;
     entt::entity cameraEntity = entt::null;
-    MapRenderer* mapRenderer = nullptr;
     
     // 键盘状态变量（用于边沿检测）
     bool prevZoomIn = false, prevZoomOut = false;
@@ -151,50 +148,6 @@ private:
 // 第九节: SDL初始化和渲染函数
 // =============================================================================
 
-/**
- * initializeSDL - 初始化SDL视频子系统
- * 
- * @param app AppState指针
- * @param w 窗口宽度
- * @param h 窗口高度
- * @return 成功返回true，失败返回false
- * 
- * 【初始化步骤】
- * 1. SDL_Init: 初始化SDL库和视频子系统
- * 2. SDL_CreateWindow: 创建窗口
- * 3. SDL_CreateRenderer: 创建渲染器
- * 4. 设置渲染器背景色
- */
-static bool initializeSDL(AppState* app, int w, int h) {
-    // 初始化SDL视频子系统
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_Init failed: %s", SDL_GetError());
-        return false;
-    }
-    
-    // 创建窗口
-    app->window = SDL_CreateWindow("Map Viewer", w, h, 0);
-    if (!app->window) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateWindow failed: %s", SDL_GetError());
-        SDL_Quit();
-        return false;
-    }
-    
-    // 创建渲染器（使用默认驱动）
-    app->renderer = SDL_CreateRenderer(app->window, NULL);
-    if (!app->renderer) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateRenderer failed: %s", SDL_GetError());
-        SDL_DestroyWindow(app->window);
-        SDL_Quit();
-        return false;
-    }
-    
-    // 设置渲染器清除颜色（天蓝色）
-    SDL_SetRenderDrawColor(app->renderer, 135, 206, 235, 255);
-    return true;
-}
-
-
 // 第十一节: SDL Main Callbacks 入口点
 // =============================================================================
 
@@ -237,18 +190,26 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     int mapID = 100000000;
     
     for (int i = 1; i < argc; i++) {
-        if (argv[i][0] != '-' && argv[i][0] != '/') {
-            // 尝试解析为地图ID
+        if (argv[i][0] == '-') {
+            // 选项标志
+            if (strcmp(argv[i], "-path") == 0 || strcmp(argv[i], "--path") == 0) {
+                if (i + 1 < argc) wzPath = argv[++i];
+            } else if (strcmp(argv[i], "-map") == 0 || strcmp(argv[i], "--map") == 0) {
+                if (i + 1 < argc) mapID = std::stoi(argv[++i]);
+            }
+        } else {
+            // 位置参数：尝试解析为数字，否则为路径
             try {
-                mapID = std::stoi(argv[i]);
+                size_t pos;
+                int parsed = std::stoi(argv[i], &pos);
+                if (pos > 0) {
+                    mapID = parsed;
+                } else {
+                    wzPath = argv[i];
+                }
             } catch (...) {
-                // 如果不是数字，可能是路径
                 wzPath = argv[i];
             }
-        } else if (strcmp(argv[i], "-path") == 0 || strcmp(argv[i], "--path") == 0) {
-            if (i + 1 < argc) wzPath = argv[++i];
-        } else if (strcmp(argv[i], "-map") == 0 || strcmp(argv[i], "--map") == 0) {
-            if (i + 1 < argc) mapID = std::stoi(argv[++i]);
         }
     }
     
@@ -318,14 +279,14 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
  * SDL_AppQuit - 应用退出清理回调
  * 
  * @param appstate 应用状态指针
- * @param result 退出结果
+ * @param result 退出结果（SDL_APP_SUCCESS 或 SDL_APP_FAILURE）
  * 
  * 【清理内容】
  * 1. 清理纹理缓存
  * 2. 关闭ImGui
  * 3. 销毁SDL渲染器和窗口
  * 4. 退出SDL
- * 5. 释放应用状态内存
+ * 注意：app 是静态单例，不会被 delete，进程结束时自动释放
  */
 void SDL_AppQuit(void* appstate, SDL_AppResult result) {
     (void)result;
@@ -454,18 +415,17 @@ bool AppState::initImGui() {
 void AppState::loadTextures(const std::string& wzPath) {
     std::cout << "[MapViewer_EnTT(AppState::loadTextures)]: Loading textures..." << std::endl;
     ownedMapRenderer = std::make_unique<MapRenderer>(registry);
-    mapRenderer = ownedMapRenderer.get();
-    mapRenderer->setMapData(mapNode, wzPath);
-    mapRenderer->loadTextures(renderer);
+    ownedMapRenderer->setMapData(mapNode, wzPath);
+    ownedMapRenderer->loadTextures(renderer);
     
     // 设置TextureCache的ResourceLoader
-    TextureCache::getInstance().setResourceLoader(mapRenderer->getResourceLoader());
+    TextureCache::getInstance().setResourceLoader(ownedMapRenderer->getResourceLoader());
     
     std::cout << "[MapViewer_EnTT(AppState::loadTextures)]: Textures loaded" << std::endl;
 }
 
 void AppState::logMapInfo() {
-    std::cout << "[MapViewer_EnTT(AppState::logMapInfo)]: ====" << std::endl;
+    std::cout << "[MapViewer_EN_TT(AppState::logMapInfo)]: ====" << std::endl;
     std::cout << "[MapInfo] ID=" << mapData->getID()
               << " Name='" << mapData->getName() << "'"
               << " BGM='" << mapData->getBgm() << "'"
@@ -501,8 +461,7 @@ bool AppState::handleEvent(SDL_Event* event) {
 }
 
 void AppState::update() {
-    // 空指针保护
-    if (!mapRenderer || cameraEntity == entt::null) return;
+    if (!ownedMapRenderer) return;
     
     // 获取键盘状态
     const bool* state = SDL_GetKeyboardState(nullptr);
@@ -520,8 +479,9 @@ void AppState::update() {
     // 缩放控制（+/-键）
     // 放大（=或+键）
     if ((state[SDL_SCANCODE_EQUALS] || state[SDL_SCANCODE_KP_PLUS]) && !prevZoomIn) {
-        float newZoom = (mapRenderer->getZoom() + 0.1f) > 4.0f ? 4.0f : (mapRenderer->getZoom() + 0.1f);
-        mapRenderer->setZoom(newZoom);
+        float zoom = ownedMapRenderer->getZoom() + 0.1f;
+        float newZoom = zoom > 4.0f ? 4.0f : zoom;
+        ownedMapRenderer->setZoom(newZoom);
         prevZoomIn = true;
         std::cout << "Zoom: " << newZoom << std::endl;
     } else if (!(state[SDL_SCANCODE_EQUALS] || state[SDL_SCANCODE_KP_PLUS])) {
@@ -530,8 +490,9 @@ void AppState::update() {
     
     // 缩小（-键）
     if (state[SDL_SCANCODE_MINUS] && !prevZoomOut) {
-        float newZoom = (mapRenderer->getZoom() - 0.1f) < 0.25f ? 0.25f : (mapRenderer->getZoom() - 0.1f);
-        mapRenderer->setZoom(newZoom);
+        float zoom = ownedMapRenderer->getZoom() - 0.1f;
+        float newZoom = zoom < 0.25f ? 0.25f : zoom;
+        ownedMapRenderer->setZoom(newZoom);
         prevZoomOut = true;
         std::cout << "Zoom: " << newZoom << std::endl;
     } else if (!state[SDL_SCANCODE_MINUS]) {
@@ -539,33 +500,36 @@ void AppState::update() {
     }
 
     // 显示开关（数字键1-6）
-    auto mapData = mapRenderer->getMapData();
-    if (state[SDL_SCANCODE_1] && !prev1) { mapData->showFoothold = !mapData->showFoothold; prev1 = true; } 
+    auto mapRenderData = ownedMapRenderer->getMapData();
+    if (!mapRenderData) return;
+    if (state[SDL_SCANCODE_1] && !prev1) { mapRenderData->showFoothold = !mapRenderData->showFoothold; prev1 = true; } 
     else if (!state[SDL_SCANCODE_1]) { prev1 = false; }
     
-    if (state[SDL_SCANCODE_2] && !prev2) { mapData->showPortal = !mapData->showPortal; prev2 = true; } 
+    if (state[SDL_SCANCODE_2] && !prev2) { mapRenderData->showPortal = !mapRenderData->showPortal; prev2 = true; } 
     else if (!state[SDL_SCANCODE_2]) { prev2 = false; }
     
-    if (state[SDL_SCANCODE_3] && !prev3) { mapData->showLife = !mapData->showLife; prev3 = true; } 
+    if (state[SDL_SCANCODE_3] && !prev3) { mapRenderData->showLife = !mapRenderData->showLife; prev3 = true; } 
     else if (!state[SDL_SCANCODE_3]) { prev3 = false; }
     
-    if (state[SDL_SCANCODE_4] && !prev4) { mapData->showBack = !mapData->showBack; prev4 = true; } 
+    if (state[SDL_SCANCODE_4] && !prev4) { mapRenderData->showBack = !mapRenderData->showBack; prev4 = true; } 
     else if (!state[SDL_SCANCODE_4]) { prev4 = false; }
     
-    if (state[SDL_SCANCODE_5] && !prev5) { mapData->showTile = !mapData->showTile; prev5 = true; } 
+    if (state[SDL_SCANCODE_5] && !prev5) { mapRenderData->showTile = !mapRenderData->showTile; prev5 = true; } 
     else if (!state[SDL_SCANCODE_5]) { prev5 = false; }
     
-    if (state[SDL_SCANCODE_6] && !prev6) { mapData->showObj = !mapData->showObj; prev6 = true; } 
+    if (state[SDL_SCANCODE_6] && !prev6) { mapRenderData->showObj = !mapRenderData->showObj; prev6 = true; } 
     else if (!state[SDL_SCANCODE_6]) { prev6 = false; }
 }
 
 void AppState::render() {
-    // 空指针保护
-    if (!mapRenderer || cameraEntity == entt::null) return;
+    if (!ownedMapRenderer || cameraEntity == entt::null) {
+        if (renderer) SDL_RenderPresent(renderer);
+        return;
+    }
     
     // 渲染游戏画面
     CameraComp& camComp = registry.get<CameraComp>(cameraEntity);
-    mapRenderer->render(renderer, camComp, mapWidth, mapHeight);
+    ownedMapRenderer->render(renderer, camComp, mapWidth, mapHeight);
 
     // 渲染ImGui界面
     ImGui_ImplSDLRenderer3_NewFrame();
@@ -712,18 +676,18 @@ void AppState::render() {
                 ImGui::TableNextColumn();
                 ImGui::SetNextItemOpen(true, ImGuiCond_Once);
                 if (ImGui::TreeNode("Render Info")) {
-                    ImGui::Text("Zoom: %.2f", mapRenderer->getZoom());
+                    ImGui::Text("Zoom: %.2f", ownedMapRenderer->getZoom());
                     CameraComp& camComp = registry.get<CameraComp>(cameraEntity);
                     ImGui::Text("Camera: (%d, %d)", camComp.x, camComp.y);
-                    auto mapData = mapRenderer->getMapData();
-                    ImGui::Text("Show Foothold: %s", mapData->showFoothold ? "Yes" : "No");
-                    ImGui::Text("Show Portal: %s", mapData->showPortal ? "Yes" : "No");
-                    ImGui::Text("Show Life: %s", mapData->showLife ? "Yes" : "No");
-                    ImGui::Text("Show Back: %s", mapData->showBack ? "Yes" : "No");
-                    ImGui::Text("Show Tile: %s", mapData->showTile ? "Yes" : "No");
-                    ImGui::Text("Show Obj: %s", mapData->showObj ? "Yes" : "No");
+                    auto mapRenderData = ownedMapRenderer->getMapData();
+                    ImGui::Text("Show Foothold: %s", mapRenderData->showFoothold ? "Yes" : "No");
+                    ImGui::Text("Show Portal: %s", mapRenderData->showPortal ? "Yes" : "No");
+                    ImGui::Text("Show Life: %s", mapRenderData->showLife ? "Yes" : "No");
+                    ImGui::Text("Show Back: %s", mapRenderData->showBack ? "Yes" : "No");
+                    ImGui::Text("Show Tile: %s", mapRenderData->showTile ? "Yes" : "No");
+                    ImGui::Text("Show Obj: %s", mapRenderData->showObj ? "Yes" : "No");
                     ImGui::Text("Back: %zu, Tile: %zu, Obj: %zu", 
-                                mapData->backs.size(), mapData->tiles.size(), mapData->objs.size());
+                                mapRenderData->backs.size(), mapRenderData->tiles.size(), mapRenderData->objs.size());
                     ImGui::TreePop();
                 }
 
@@ -750,9 +714,8 @@ void AppState::cleanup() {
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
 
-    // 清理ownedMapRenderer（会先销毁其管理的MapRenderer）
+    // 清理ownedMapRenderer
     ownedMapRenderer.reset();
-    mapRenderer = nullptr;
     
     // 销毁SDL资源
     if (renderer) {

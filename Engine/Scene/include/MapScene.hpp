@@ -33,7 +33,11 @@ struct PositionComp {
 };
 
 struct BackComp {
-    SDL_Texture* texture = nullptr;
+    std::vector<SDL_Texture*> frames;
+    int frameCount = 0;
+    int currentFrame = 0;
+    int frameDelay = 0;
+    int lastFrameTime = 0;
     int texW = 0, texH = 0;
     int x = 0, y = 0;
     int cx = 0, cy = 0;
@@ -43,6 +47,8 @@ struct BackComp {
     bool front = false;
     int alpha = 255;
     int originX = 0, originY = 0;
+    
+    SDL_Texture* getTexture() const { return frames.empty() ? nullptr : frames[currentFrame]; }
 };
 
 struct TileComp {

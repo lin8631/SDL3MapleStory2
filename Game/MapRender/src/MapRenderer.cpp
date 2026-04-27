@@ -55,6 +55,15 @@ MapRenderer::MapRenderer(entt::registry& reg)
     startTime_ = SDL_GetTicks();
 }
 
+static int GetWzInt(std::shared_ptr<Wz_Node> node, int defaultValue = 0) {
+    if (!node) return defaultValue;
+    try {
+        return std::stoi(node->getText());
+    } catch (...) {
+        return defaultValue;
+    }
+}
+
 bool MapRenderer::loadMap(int mapId, const std::string& wzPath) {
     auto structure = std::make_shared<Wz_Structure>();
     structure->setAutoDetectExtFiles(true);
@@ -217,13 +226,15 @@ void MapRenderer::loadTextures(SDL_Renderer* renderer) {
 void MapRenderer::unloadTextures() {
     // 销毁纹理的实体也被销毁，防止重复加载时实体累积
     
-    // BackComp
+    // BackComp - 销毁所有帧纹理
     for (auto e : registry_.view<BackComp>()) {
         auto& back = registry_.get<BackComp>(e);
-        if (back.texture) {
-            SDL_DestroyTexture(back.texture);
-            back.texture = nullptr;
+        for (auto tex : back.frames) {
+            if (tex) {
+                SDL_DestroyTexture(tex);
+            }
         }
+        back.frames.clear();
     }
     registry_.clear<BackComp>();
     
@@ -286,32 +297,42 @@ void MapRenderer::loadBackTexture(SDL_Renderer* renderer, BackItem& back) {
     
     auto frameNode = extracted->getNodes()->operator[](aniDir);
     if (!frameNode || !frameNode->getNodes()) {
-        // 如果指定类型不存在，尝试ani
         frameNode = extracted->getNodes()->operator[]("ani");
         if (!frameNode || !frameNode->getNodes()) {
             frameNode = extracted;
         }
     }
     
-    std::string frameNo = back.noStr.empty() ? std::to_string(back.animFrame) : back.noStr;
-    auto targetNode = frameNode->getNodes()->operator[](frameNo);
-    if (!targetNode) {
-        targetNode = frameNode->getNodes()->operator[]("0");
-    }
-    if (!targetNode) return;
+    if (!frameNode->getNodes()) return;
     
-    auto wzPng = targetNode->getValue<Wz_Png>();
-    if (!wzPng) {
-        if (targetNode->getNodes() && targetNode->getNodes()->getCount() > 0) {
-            auto pngChild = (*targetNode->getNodes())[0];
-            wzPng = pngChild->getValue<Wz_Png>();
-        }
-    }
-    if (!wzPng) return;
+    // 加载所有帧
+    std::vector<SDL_Texture*> frames;
+    int frameDelay = 0;
+    auto frameNodes = frameNode->getNodes();
+    int nodeCount = frameNodes->getCount();
     
-    // 读取origin偏移
-    auto originNode = targetNode->getNodes()->find("origin");
-    if (originNode != targetNode->getNodes()->end()) {
+    for (int i = 0; i < nodeCount; i++) {
+        auto child = (*frameNodes)[i];
+        if (!child) continue;
+        
+        auto wzPng = child->getValue<Wz_Png>();
+        if (!wzPng) continue;
+        
+        // 加载纹理
+        SDL_Texture* tex = resourceLoader_->loadTextureFromWzPng(renderer, wzPng);
+        if (!tex) continue;
+        
+        frames.push_back(tex);
+    }
+    
+    if (frames.empty()) return;
+    
+    // 获取第一帧的尺寸和origin
+    float w, h;
+    SDL_GetTextureSize(frames[0], &w, &h);
+    
+    auto originNode = frameNode->getNodes()->find("origin");
+    if (originNode != frameNode->getNodes()->end()) {
         auto originVec = (*originNode)->getValue<Wz_Vector>();
         if (originVec) {
             back.originX = originVec->getX();
@@ -319,17 +340,49 @@ void MapRenderer::loadBackTexture(SDL_Renderer* renderer, BackItem& back) {
         }
     }
     
-    SDL_Texture* tex = resourceLoader_->loadTextureFromWzPng(renderer, wzPng);
-    if (!tex) return;
+    // 如果 BackItem 指定了特定帧，只保留该帧
+    if (!back.noStr.empty() || back.animFrame > 0) {
+        std::string frameNo = back.noStr.empty() ? std::to_string(back.animFrame) : back.noStr;
+        int frameIdx = 0;
+        try {
+            frameIdx = std::stoi(frameNo);
+        } catch (...) {
+            frameIdx = 0;
+        }
+        if (frameIdx >= 0 && frameIdx < static_cast<int>(frames.size())) {
+            // 释放其他帧
+            for (size_t i = 0; i < frames.size(); i++) {
+                if (static_cast<int>(i) != frameIdx) {
+                    SDL_DestroyTexture(frames[i]);
+                }
+            }
+            frames.clear();
+            frames.push_back(frames[frameIdx]);
+        } else {
+            for (auto tex : frames) {
+                SDL_DestroyTexture(tex);
+            }
+            frames.clear();
+            frames.push_back(frames[0]);
+        }
+    }
     
-    float w, h;
-    SDL_GetTextureSize(tex, &w, &h);
+    // 加载帧延迟
+    auto delayNode = frameNode->getNodes()->find("delay");
+    if (delayNode != frameNode->getNodes()->end()) {
+        frameDelay = GetWzInt(*delayNode, 100);
+    }
+    if (frameDelay == 0) {
+        frameDelay = 100; // 默认 100ms
+    }
     
+    // 创建实体
     auto e = registry_.create();
-    registry_.emplace<BackComp>(e, tex, static_cast<int>(w), static_cast<int>(h),
-                             back.x, back.y, back.cx, back.cy, 
-                             back.rx, back.ry, back.type, back.flipX, back.front,
-                             back.alpha, back.originX, back.originY);
+    registry_.emplace<BackComp>(e, std::move(frames), static_cast<int>(frames.size()), 0, frameDelay, 0,
+                            static_cast<int>(w), static_cast<int>(h),
+                            back.x, back.y, back.cx, back.cy, 
+                            back.rx, back.ry, back.type, back.flipX, back.front,
+                            back.alpha, back.originX, back.originY);
 }
 
 void MapRenderer::loadTileTexture(SDL_Renderer* renderer, TileItem& tile) {
@@ -515,18 +568,27 @@ void MapRenderer::render(SDL_Renderer* renderer, const CameraComp& cam, int scre
 }
 
 void MapRenderer::renderBacks(SDL_Renderer* renderer, const CameraComp& cam, bool isFront) {
-    Uint32 elapsed = SDL_GetTicks() - startTime_;
+    Uint32 currentTime = SDL_GetTicks();
     int camCenterX = cam.x + cam.w / 2;
     int camCenterY = cam.y + cam.h / 2;
 
     auto view = registry_.view<BackComp>();
     for (auto e : view) {
         auto& back = registry_.get<BackComp>(e);
-        if (!back.texture) continue;
+        SDL_Texture* tex = back.getTexture();
+        if (!tex) continue;
         if (back.front != isFront) continue;
         
-        int cx = back.cx > 0 ? back.cx : back.texW;
-        int cy = back.cy > 0 ? back.cy : back.texH;
+        // 动画帧切换
+        if (back.frameCount > 1 && back.frameDelay > 0) {
+            if (currentTime - back.lastFrameTime >= static_cast<Uint32>(back.frameDelay)) {
+                back.currentFrame = (back.currentFrame + 1) % back.frameCount;
+                back.lastFrameTime = currentTime;
+            }
+        }
+        
+        int cx = (back.cx > 0) ? back.cx : ((back.texW > 0) ? back.texW : 0);
+        int cy = (back.cy > 0) ? back.cy : ((back.texH > 0) ? back.texH : 0);
         
         float posX = static_cast<float>(back.x);
         float posY = static_cast<float>(back.y);
@@ -536,6 +598,7 @@ void MapRenderer::renderBacks(SDL_Renderer* renderer, const CameraComp& cam, boo
         bool vertical = (mode == 2 || mode == 3 || mode == 5 || mode == 7);
         bool scrollH = (mode == 4 || mode == 6);
         bool scrollV = (mode == 5 || mode == 7);
+        Uint32 elapsed = currentTime - startTime_;
         
         if (scrollH) {
             float scrollOffset = static_cast<float>(back.rx) * 5.0f * elapsed / 1000.0f;
@@ -593,12 +656,13 @@ void MapRenderer::renderBacks(SDL_Renderer* renderer, const CameraComp& cam, boo
                     if (sx + sw < 0 || sy + sh < 0 || sx > cam.w || sy > cam.h) continue;
                     
                     if (back.alpha < 255) {
-                        SDL_SetTextureAlphaMod(back.texture, static_cast<Uint8>(back.alpha));
+                        SDL_SetTextureAlphaMod(back.getTexture(), static_cast<Uint8>(back.alpha));
                     }
                     
+                    SDL_FlipMode flip = back.flipX ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
                     SDL_FRect dst{ static_cast<float>(sx), static_cast<float>(sy), 
                                    static_cast<float>(sw), static_cast<float>(sh) };
-                    SDL_RenderTexture(renderer, back.texture, nullptr, &dst);
+                    SDL_RenderTextureRotated(renderer, back.getTexture(), nullptr, &dst, 0, nullptr, flip);
                 }
             }
         } else {
@@ -610,12 +674,13 @@ void MapRenderer::renderBacks(SDL_Renderer* renderer, const CameraComp& cam, boo
             if (sx + sw < 0 || sy + sh < 0 || sx > cam.w || sy > cam.h) continue;
             
             if (back.alpha < 255) {
-                SDL_SetTextureAlphaMod(back.texture, static_cast<Uint8>(back.alpha));
+                SDL_SetTextureAlphaMod(back.getTexture(), static_cast<Uint8>(back.alpha));
             }
             
+            SDL_FlipMode flip = back.flipX ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
             SDL_FRect dst{ static_cast<float>(sx), static_cast<float>(sy), 
                            static_cast<float>(sw), static_cast<float>(sh) };
-            SDL_RenderTexture(renderer, back.texture, nullptr, &dst);
+            SDL_RenderTextureRotated(renderer, back.getTexture(), nullptr, &dst, 0, nullptr, flip);
         }
     }
 }
@@ -674,9 +739,10 @@ void MapRenderer::renderObjs(SDL_Renderer* renderer, const CameraComp& cam, int 
             SDL_SetTextureAlphaMod(obj.texture, static_cast<Uint8>(obj.alpha));
         }
         
+        SDL_FlipMode flip = obj.flipX ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
         SDL_FRect dst{ static_cast<float>(sx), static_cast<float>(sy), 
                        static_cast<float>(sw), static_cast<float>(sh) };
-        SDL_RenderTexture(renderer, obj.texture, nullptr, &dst);
+        SDL_RenderTextureRotated(renderer, obj.texture, nullptr, &dst, 0, nullptr, flip);
     }
 }
 

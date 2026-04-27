@@ -2,6 +2,8 @@
 #include "imgui.h"
 
 #include <filesystem>
+#include <thread>
+#include <chrono>
 
 #include "Wz_Node.hpp"
 #include "Wz_Structure.hpp"
@@ -25,29 +27,22 @@ int getMaxItemsForDepth(int depth) {
     return MAX_ITEMS_DEPTH_4_6;
 }
 
+void extractWzImageAsync(std::shared_ptr<Wz_Image> wzImg) {
+    if (wzImg) {
+        std::thread([wzImg]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            wzImg->tryExtract();
+        }).detach();
+    }
+}
+
 }
 
 WzBrowserWindow::WzBrowserWindow() : visible(true) {}
 
 WzBrowserWindow::~WzBrowserWindow() = default;
 
-void WzBrowserWindow::render(
-    std::shared_ptr<Wz_Structure> structure,
-    std::shared_ptr<Wz_Node> mapNode,
-    const std::vector<std::shared_ptr<Wz_File>>& wzFiles,
-    float zoom,
-    int cameraX,
-    int cameraY,
-    bool showFoothold,
-    bool showPortal,
-    bool showLife,
-    bool showBack,
-    bool showTile,
-    bool showObj,
-    size_t backCount,
-    size_t tileCount,
-    size_t objCount
-) {
+void WzBrowserWindow::render(const WzBrowserState& state) {
     if (!visible) return;
 
     if (!ImGui::Begin("WZ Resource Browser", &visible)) {
@@ -63,7 +58,6 @@ void WzBrowserWindow::render(
         // 第一列：WZ文件列表
         ImGui::TableNextColumn();
         if (ImGui::BeginChild("##col1")) {
-            // 使用普通 lambda 代替 std::function 提高性能
             auto renderWzNode = [&](auto&& self, std::shared_ptr<Wz_Node> node, int depth, const std::string& path) -> void {
                 if (!node || depth > MAX_DEPTH) return;
                 auto nodes = node->getNodes();
@@ -86,10 +80,8 @@ void WzBrowserWindow::render(
                         
                         ImGui::PushID((void*)child.get());
                         
-                        // 只有用户主动点击 TreeNode 的标签部分才更新选中状态
                         if (hasChildNodes) {
                             if (ImGui::TreeNode((void*)child.get(), "%s", text.c_str())) {
-                                // 使用 IsItemClicked 判断用户是否点击了节点标签（而非展开箭头）
                                 if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
                                     selectedNode = child;
                                     selectedNodeTitle = childPath;
@@ -97,16 +89,12 @@ void WzBrowserWindow::render(
                                 self(self, child, depth + 1, childPath);
                                 ImGui::TreePop();
                             }
-                            // 双击展开节点
-                            if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-                                ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-                            }
                         } else if (isWzImage) {
                             bool isSelected = (selectedNode == child);
                             if (ImGui::Selectable(text.c_str(), isSelected, ImGuiSelectableFlags_None)) {
                                 selectedNode = child;
                                 selectedNodeTitle = childPath;
-                                if (wzImg) wzImg->tryExtract();
+                                extractWzImageAsync(wzImg);
                             }
                         } else {
                             ImGui::Text("%s", text.c_str());
@@ -120,8 +108,9 @@ void WzBrowserWindow::render(
                 }
             };
             
+            const auto& wzFiles = state.wzFiles;
             if (!wzFiles.empty()) {
-                auto baseNode = structure->getWzNode();
+                auto baseNode = state.structure->getWzNode();
                 if (baseNode && baseNode->getNodes() && baseNode->getNodes()->getCount() > 0) {
                     std::string rootName = "base.wz";
                     ImGui::PushID((void*)baseNode.get());
@@ -175,7 +164,7 @@ void WzBrowserWindow::render(
         // 第二列：选中节点的内容
         ImGui::TableNextColumn();
         if (ImGui::BeginChild("##col2")) {
-            auto displayNode = selectedNode ? selectedNode : mapNode;
+            auto displayNode = selectedNode ? selectedNode : state.mapNode;
             if (displayNode && displayNode->getNodes()) {
                 auto renderWzNode2 = [&](auto&& self, std::shared_ptr<Wz_Node> node, int depth) -> void {
                     if (!node || depth > MAX_DEPTH) return;
@@ -197,14 +186,12 @@ void WzBrowserWindow::render(
                             bool isWzImage = wzImg != nullptr;
                             
                             ImGui::PushID((void*)child.get());
-                            // 只显示有子节点的非img目录（只读，不展开）
                             if (hasChildNodes && !isWzImage) {
                                 if (ImGui::TreeNode((void*)child.get(), "%s", text.c_str())) {
                                     self(self, child, depth + 1);
                                     ImGui::TreePop();
                                 }
                             } else {
-                                // img节点和叶子节点都只读显示
                                 ImGui::Text("%s", text.c_str());
                             }
                             ImGui::PopID();
@@ -222,21 +209,21 @@ void WzBrowserWindow::render(
         // 第三列：渲染信息（添加独立滚动区域）
         ImGui::TableNextColumn();
         if (ImGui::BeginChild("##col3")) {
-            ImGui::Text("Zoom: %.2f", zoom);
-            ImGui::Text("Camera: (%d, %d)", cameraX, cameraY);
+            ImGui::Text("Zoom: %.2f", state.zoom);
+            ImGui::Text("Camera: (%d, %d)", state.cameraX, state.cameraY);
             ImGui::Separator();
             ImGui::Text("Render Options:");
-            ImGui::Text("  Foothold: %s", showFoothold ? "Yes" : "No");
-            ImGui::Text("  Portal: %s", showPortal ? "Yes" : "No");
-            ImGui::Text("  Life: %s", showLife ? "Yes" : "No");
-            ImGui::Text("  Back: %s", showBack ? "Yes" : "No");
-            ImGui::Text("  Tile: %s", showTile ? "Yes" : "No");
-            ImGui::Text("  Obj: %s", showObj ? "Yes" : "No");
+            ImGui::Text("  Foothold: %s", state.showFoothold ? "Yes" : "No");
+            ImGui::Text("  Portal: %s", state.showPortal ? "Yes" : "No");
+            ImGui::Text("  Life: %s", state.showLife ? "Yes" : "No");
+            ImGui::Text("  Back: %s", state.showBack ? "Yes" : "No");
+            ImGui::Text("  Tile: %s", state.showTile ? "Yes" : "No");
+            ImGui::Text("  Obj: %s", state.showObj ? "Yes" : "No");
             ImGui::Separator();
             ImGui::Text("Counts:");
-            ImGui::Text("  Back: %zu", backCount);
-            ImGui::Text("  Tile: %zu", tileCount);
-            ImGui::Text("  Obj: %zu", objCount);
+            ImGui::Text("  Back: %zu", state.backCount);
+            ImGui::Text("  Tile: %zu", state.tileCount);
+            ImGui::Text("  Obj: %zu", state.objCount);
         }
         ImGui::EndChild();
 

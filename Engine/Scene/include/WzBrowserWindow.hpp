@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <functional>
+#include <vector>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_events.h>
@@ -14,28 +15,33 @@ class Wz_Structure;
 class Wz_File;
 }
 
+struct WzBrowserState {
+    std::shared_ptr<WzLibCpp::Wz_Structure> structure;
+    std::shared_ptr<WzLibCpp::Wz_Node> mapNode;
+    std::vector<std::shared_ptr<WzLibCpp::Wz_File>> wzFiles;
+
+    float zoom = 1.0f;
+    int cameraX = 0;
+    int cameraY = 0;
+
+    bool showFoothold = true;
+    bool showPortal = true;
+    bool showLife = true;
+    bool showBack = true;
+    bool showTile = true;
+    bool showObj = true;
+
+    size_t backCount = 0;
+    size_t tileCount = 0;
+    size_t objCount = 0;
+};
+
 class WzBrowserWindow {
 public:
     WzBrowserWindow();
     ~WzBrowserWindow();
 
-    void render(
-        std::shared_ptr<WzLibCpp::Wz_Structure> structure,
-        std::shared_ptr<WzLibCpp::Wz_Node> mapNode,
-        const std::vector<std::shared_ptr<WzLibCpp::Wz_File>>& wzFiles,
-        float zoom,
-        int cameraX,
-        int cameraY,
-        bool showFoothold,
-        bool showPortal,
-        bool showLife,
-        bool showBack,
-        bool showTile,
-        bool showObj,
-        size_t backCount,
-        size_t tileCount,
-        size_t objCount
-    );
+    void render(const WzBrowserState& state);
 
     void toggle() { visible = !visible; }
     bool isVisible() const { return visible; }

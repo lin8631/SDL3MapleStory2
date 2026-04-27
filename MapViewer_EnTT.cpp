@@ -567,24 +567,26 @@ void AppState::render() {
     // 获取地图渲染数据
     auto mapRenderData = ownedMapRenderer->getMapData();
 
+    // 构建浏览器状态
+    WzBrowserState state;
+    state.structure = structure;
+    state.mapNode = mapNode;
+    state.wzFiles = wzFiles;
+    state.zoom = ownedMapRenderer->getZoom();
+    state.cameraX = camComp.x;
+    state.cameraY = camComp.y;
+    state.showFoothold = mapRenderData->showFoothold;
+    state.showPortal = mapRenderData->showPortal;
+    state.showLife = mapRenderData->showLife;
+    state.showBack = mapRenderData->showBack;
+    state.showTile = mapRenderData->showTile;
+    state.showObj = mapRenderData->showObj;
+    state.backCount = mapRenderData->backs.size();
+    state.tileCount = mapRenderData->tiles.size();
+    state.objCount = mapRenderData->objs.size();
+
     // 渲染 WZ 浏览器窗口
-    wzBrowserWindow.render(
-        structure,
-        mapNode,
-        wzFiles,
-        ownedMapRenderer->getZoom(),
-        camComp.x,
-        camComp.y,
-        mapRenderData->showFoothold,
-        mapRenderData->showPortal,
-        mapRenderData->showLife,
-        mapRenderData->showBack,
-        mapRenderData->showTile,
-        mapRenderData->showObj,
-        mapRenderData->backs.size(),
-        mapRenderData->tiles.size(),
-        mapRenderData->objs.size()
-    );
+    wzBrowserWindow.render(state);
 
     // 执行ImGui渲染
     ImGui::Render();

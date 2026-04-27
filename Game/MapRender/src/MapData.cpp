@@ -257,7 +257,7 @@ bool MapRenderData::load(std::shared_ptr<Wz_Node> imgNode) {
                     item.type = GetInt(childNodes->operator[]("pt"), 0);
                     item.x = GetInt(childNodes->operator[]("x"), 0);
                     item.y = GetInt(childNodes->operator[]("y"), 0);
-                    item.targetMap = GetInt(childNodes->operator[]("tm"), -1);
+                    item.targetMapId = GetInt(childNodes->operator[]("tm"), -1);
                     item.targetName = GetString(childNodes->operator[]("tn"), "");
                     item.script = GetString(childNodes->operator[]("script"), "");
                 }

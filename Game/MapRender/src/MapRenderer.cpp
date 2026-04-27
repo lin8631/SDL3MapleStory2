@@ -128,9 +128,10 @@ bool MapRenderer::loadMap(int mapId, const std::string& wzPath) {
 }
 
 void MapRenderer::setMapData(std::shared_ptr<Wz_Node> mapNode, const std::string& wzPath) {
+    unloadTextures();
     mapData_ = std::make_unique<MapRenderData>();
     if (!mapData_->load(mapNode)) {
-        std::cerr << "Failed to load map data" << std::endl;
+        SDL_LogWarn(0, "[MapRenderer] Failed to load map data");
         return;
     }
     mapData_->wzPath = wzPath;

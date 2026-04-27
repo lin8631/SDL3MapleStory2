@@ -85,6 +85,7 @@ struct LifeComp {
 };
 
 struct BackItem : public ContainerNode::Slot {
+    std::string name;
     std::string bS;
     int x = 0, y = 0;
     int cx = 0, cy = 0;
@@ -108,6 +109,7 @@ struct BackItem : public ContainerNode::Slot {
 };
 
 struct ObjItem : public ContainerNode::Slot {
+    std::string name;
     int x = 0, y = 0;
     int z = 0;
     std::string oS;
@@ -125,6 +127,7 @@ struct ObjItem : public ContainerNode::Slot {
 };
 
 struct TileItem : public ContainerNode::Slot {
+    std::string name;
     int x = 0, y = 0;
     int z = 0;
     int u = 0, v = 0;
@@ -142,6 +145,7 @@ struct TileItem : public ContainerNode::Slot {
 struct LifeItem : public ContainerNode::Slot {
     enum class LifeType { Mob, Npc };
     
+    std::string name;
     int id = 0;
     LifeType type = LifeType::Mob;
     int x = 0, y = 0;
@@ -151,8 +155,11 @@ struct LifeItem : public ContainerNode::Slot {
     int rx = 0, ry = 0;
     int time = 0;
     int mobTime = 0;
+    int respawnTime = 0;
+    bool hide = false;
+    bool flipX = false;
+    int rx0 = 0, rx1 = 0;
     std::string typeName;
-    std::string name;
     std::string funcName;
     std::string interactName;
     std::string script;
@@ -160,11 +167,48 @@ struct LifeItem : public ContainerNode::Slot {
 };
 
 struct PortalItem : public ContainerNode::Slot {
+    int id = 0;
     int x = 0, y = 0;
     int type = 0;
+    std::string name;
     std::string targetPortalName;
     int targetMapId = 0;
-    std::string name;
+    std::string targetName;
+    std::string script;
+};
+
+struct MiniMapData {
+    int width = 0;
+    int height = 0;
+    int centerX = 0;
+    int centerY = 0;
+    std::string info;
+    int magaX = 0;
+    int magaY = 0;
+    int mag = 0;
+};
+
+struct SceneNode {
+    virtual ~SceneNode() = default;
+    virtual void update(float deltaTime) {}
+    virtual void render(SDL_Renderer* renderer, int cameraX, int cameraY) {}
+    virtual void addChild(std::shared_ptr<SceneNode> child) {}
+    virtual void removeChild(std::shared_ptr<SceneNode> child) {}
+    virtual std::vector<std::shared_ptr<SceneNode>>& getChildren() {
+        static std::vector<std::shared_ptr<SceneNode>> empty;
+        return empty;
+    }
+};
+
+struct FootholdItem {
+    int x1 = 0, y1 = 0;
+    int x2 = 0, y2 = 0;
+    int prev = 0, next = 0;
+    int layer = 0;
+    int id = 0;
+    int force = 0;
+    int type = 0;
+    std::vector<int> nextList;
 };
 
 struct MapScene {

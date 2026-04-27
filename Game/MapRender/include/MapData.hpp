@@ -103,48 +103,6 @@ private:
     int nextTextureId_ = 1;
 };
 
-struct TileComp {
-    int x, y;
-    int layer;
-    int z;
-    SDL_Texture* texture = nullptr;
-    int texW = 0, texH = 0;
-};
-
-struct ObjComp {
-    int x, y;
-    int layer;
-    int z;
-    SDL_Texture* texture = nullptr;
-    int texW = 0, texH = 0;
-};
-
-struct BackComp {
-    int x, y, cx, cy;
-    int rx, ry;
-    int type;
-    bool isFront;
-    SDL_Texture* texture = nullptr;
-    int texW = 0, texH = 0;
-};
-
-struct FootholdComp {
-    int x1, y1, x2, y2;
-};
-
-struct PortalComp {
-    int x, y;
-};
-
-struct LifeComp {
-    int x, y;
-};
-
-struct CameraComp {
-    int x = 0, y = 0;
-    int w = 1024, h = 768;
-};
-
 class MapRenderer {
 public:
     MapRenderer(entt::registry& reg);

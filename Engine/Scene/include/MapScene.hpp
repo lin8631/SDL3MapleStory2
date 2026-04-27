@@ -61,6 +61,8 @@ struct ObjComp {
     int z = 0;
     int layer = 0;
     int originX = 0, originY = 0;
+    bool flipX = false;
+    int alpha = 255;
 };
 
 struct FootholdComp {
@@ -120,6 +122,7 @@ struct ObjItem : public ContainerNode::Slot {
     int animFrame = 0;
     int time = 0;
     int layer = 0;
+    int alpha = 255;
     int originX = 0, originY = 0;
     
     SDL_Texture* texture = nullptr;

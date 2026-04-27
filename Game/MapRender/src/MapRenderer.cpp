@@ -70,6 +70,22 @@ bool MapRenderer::loadMap(int mapId, const std::string& wzPath) {
     
     PluginBase::PluginManager::RegisterStructures({structure});
     
+    std::vector<std::shared_ptr<Wz_Structure>> structures;
+    std::vector<std::string> wzFiles = {"Map.wz", "Tile.wz", "Obj.wz"};
+    for (const auto& wzFile : wzFiles) {
+        auto st = std::make_shared<Wz_Structure>();
+        st->setAutoDetectExtFiles(true);
+        auto filePath = wzPath + "/" + wzFile;
+        auto rootNode = std::make_shared<Wz_Node>(wzFile);
+        auto file = st->loadFile(filePath, rootNode, true, false);
+        if (file) {
+            structures.push_back(st);
+        }
+    }
+    if (!structures.empty()) {
+        PluginBase::PluginManager::RegisterStructures(structures);
+    }
+    
     auto mapNode = structure->getWzNode()->getNodes()->find("Map");
     if (mapNode == structure->getWzNode()->getNodes()->end()) {
         std::cerr << "Cannot find Map node" << std::endl;
@@ -258,13 +274,14 @@ void MapRenderer::loadBackTexture(SDL_Renderer* renderer, BackItem& back) {
     auto extracted = frameImg->getNode();
     if (!extracted || !extracted->getNodes()) return;
     
-    // C# 中 BackItem.Ani 只有 0（使用 back 目录）和 1（使用 ani 目录）
-    // spine 通过单独的 SpineAni 字段处理，不是 ani 字段
+    // C# 中 BackItem.Ani: 0=back, 1=ani, 2=spine
     std::string aniDir;
     switch (back.ani) {
         case 0: aniDir = "back"; break;
         case 1: aniDir = "ani"; break;
-        default: aniDir = "back"; break;
+        case 2: aniDir = "spine"; break;
+        default: SDL_LogWarn(0, "[MapRenderer] Unknown back ani value: %d, using back", back.ani);
+                aniDir = "back"; break;
     }
     
     auto frameNode = extracted->getNodes()->operator[](aniDir);
@@ -479,7 +496,7 @@ void MapRenderer::loadObjTexture(SDL_Renderer* renderer, ObjItem& obj) {
     auto e = registry_.create();
     registry_.emplace<ObjComp>(e, tex, static_cast<int>(w), static_cast<int>(h),
                             obj.x, obj.y, obj.layer, obj.z,
-                            obj.originX, obj.originY);
+                            obj.originX, obj.originY, obj.flipX);
 }
 
 void MapRenderer::render(SDL_Renderer* renderer, const CameraComp& cam, int screenW, int screenH) {
@@ -521,11 +538,11 @@ void MapRenderer::renderBacks(SDL_Renderer* renderer, const CameraComp& cam, boo
         bool scrollV = (mode == 5 || mode == 7);
         
         if (scrollH) {
-            // C#: position.X += ((float)back.Rx * 5 * back.View.Time / 1000) % cx;
-            posX += static_cast<float>(back.rx) * 5.0f * elapsed / 1000.0f;
+            float scrollOffset = static_cast<float>(back.rx) * 5.0f * elapsed / 1000.0f;
             if (back.cx > 0) {
-                posX = std::fmod(posX, static_cast<float>(back.cx));
+                scrollOffset = std::fmod(scrollOffset, static_cast<float>(back.cx));
             }
+            posX = static_cast<float>(back.x) + scrollOffset;
         } else {
             // 修复：正确公式是 (100 + rx) / 100，当rx=0时背景跟随相机
             // C#: position.X += Camera.Center.X * (100 + back.Rx) / 100;
@@ -533,10 +550,11 @@ void MapRenderer::renderBacks(SDL_Renderer* renderer, const CameraComp& cam, boo
         }
         
         if (scrollV) {
-            posY += static_cast<float>(back.ry) * 5.0f * elapsed / 1000.0f;
+            float scrollOffset = static_cast<float>(back.ry) * 5.0f * elapsed / 1000.0f;
             if (back.cy > 0) {
-                posY = std::fmod(posY, static_cast<float>(back.cy));
+                scrollOffset = std::fmod(scrollOffset, static_cast<float>(back.cy));
             }
+            posY = static_cast<float>(back.y) + scrollOffset;
         } else {
             // 修复：正确公式是 (100 + ry) / 100
             posY = static_cast<float>(back.y) + static_cast<float>(camCenterY) * (100 + back.ry) / 100.0f;
@@ -574,6 +592,10 @@ void MapRenderer::renderBacks(SDL_Renderer* renderer, const CameraComp& cam, boo
                     
                     if (sx + sw < 0 || sy + sh < 0 || sx > cam.w || sy > cam.h) continue;
                     
+                    if (back.alpha < 255) {
+                        SDL_SetTextureAlphaMod(back.texture, static_cast<Uint8>(back.alpha));
+                    }
+                    
                     SDL_FRect dst{ static_cast<float>(sx), static_cast<float>(sy), 
                                    static_cast<float>(sw), static_cast<float>(sh) };
                     SDL_RenderTexture(renderer, back.texture, nullptr, &dst);
@@ -586,6 +608,10 @@ void MapRenderer::renderBacks(SDL_Renderer* renderer, const CameraComp& cam, boo
             int sh = static_cast<int>(back.texH * zoom_);
             
             if (sx + sw < 0 || sy + sh < 0 || sx > cam.w || sy > cam.h) continue;
+            
+            if (back.alpha < 255) {
+                SDL_SetTextureAlphaMod(back.texture, static_cast<Uint8>(back.alpha));
+            }
             
             SDL_FRect dst{ static_cast<float>(sx), static_cast<float>(sy), 
                            static_cast<float>(sw), static_cast<float>(sh) };
@@ -643,6 +669,10 @@ void MapRenderer::renderObjs(SDL_Renderer* renderer, const CameraComp& cam, int 
         int sh = static_cast<int>(obj.texH * zoom_);
         
         if (sx + sw < 0 || sy + sh < 0 || sx > cam.w || sy > cam.h) continue;
+        
+        if (obj.alpha < 255) {
+            SDL_SetTextureAlphaMod(obj.texture, static_cast<Uint8>(obj.alpha));
+        }
         
         SDL_FRect dst{ static_cast<float>(sx), static_cast<float>(sy), 
                        static_cast<float>(sw), static_cast<float>(sh) };

@@ -276,7 +276,7 @@ void MapRenderer::loadBackTexture(SDL_Renderer* renderer, BackItem& back) {
         }
     }
     
-    std::string frameNo = std::to_string(back.animFrame);
+    std::string frameNo = back.noStr.empty() ? std::to_string(back.animFrame) : back.noStr;
     auto targetNode = frameNode->getNodes()->operator[](frameNo);
     if (!targetNode) {
         targetNode = frameNode->getNodes()->operator[]("0");
@@ -292,6 +292,16 @@ void MapRenderer::loadBackTexture(SDL_Renderer* renderer, BackItem& back) {
     }
     if (!wzPng) return;
     
+    // 读取origin偏移
+    auto originNode = targetNode->getNodes()->find("origin");
+    if (originNode != targetNode->getNodes()->end()) {
+        auto originVec = (*originNode)->getValue<Wz_Vector>();
+        if (originVec) {
+            back.originX = originVec->getX();
+            back.originY = originVec->getY();
+        }
+    }
+    
     SDL_Texture* tex = resourceLoader_->loadTextureFromWzPng(renderer, wzPng);
     if (!tex) return;
     
@@ -299,9 +309,10 @@ void MapRenderer::loadBackTexture(SDL_Renderer* renderer, BackItem& back) {
     SDL_GetTextureSize(tex, &w, &h);
     
     auto e = registry_.create();
-    registry_.emplace<BackComp>(e, back.x, back.y, back.cx, back.cy, 
-                                 back.rx, back.ry, back.type, back.front,
-                                 tex, static_cast<int>(w), static_cast<int>(h));
+    registry_.emplace<BackComp>(e, tex, static_cast<int>(w), static_cast<int>(h),
+                             back.x, back.y, back.cx, back.cy, 
+                             back.rx, back.ry, back.type, back.flipX, back.front,
+                             back.alpha, back.originX, back.originY);
 }
 
 void MapRenderer::loadTileTexture(SDL_Renderer* renderer, TileItem& tile) {
@@ -372,8 +383,9 @@ auto tileEntryNode = uFolderNode->getNodes()->operator[](tile.tileNo);
     SDL_GetTextureSize(tex, &w, &h);
     
     auto e = registry_.create();
-    registry_.emplace<TileComp>(e, tile.x, tile.y, tile.layer, tile.z,
-                                 tex, static_cast<int>(w), static_cast<int>(h));
+    registry_.emplace<TileComp>(e, tex, static_cast<int>(w), static_cast<int>(h),
+                             tile.x, tile.y, tile.layer, tile.z,
+                             tile.originX, tile.originY);
 }
 
 void MapRenderer::loadObjTexture(SDL_Renderer* renderer, ObjItem& obj) {
@@ -469,8 +481,9 @@ void MapRenderer::loadObjTexture(SDL_Renderer* renderer, ObjItem& obj) {
     SDL_GetTextureSize(tex, &w, &h);
     
     auto e = registry_.create();
-    registry_.emplace<ObjComp>(e, obj.x, obj.y, obj.layer, obj.z,
-                                 tex, static_cast<int>(w), static_cast<int>(h));
+    registry_.emplace<ObjComp>(e, tex, static_cast<int>(w), static_cast<int>(h),
+                            obj.x, obj.y, obj.layer, obj.z,
+                            obj.originX, obj.originY);
 }
 
 void MapRenderer::render(SDL_Renderer* renderer, const CameraComp& cam, int screenW, int screenH) {
@@ -497,7 +510,7 @@ void MapRenderer::renderBacks(SDL_Renderer* renderer, const CameraComp& cam, boo
     for (auto e : view) {
         auto& back = registry_.get<BackComp>(e);
         if (!back.texture) continue;
-        if (back.isFront != isFront) continue;
+        if (back.front != isFront) continue;
         
         int cx = back.cx > 0 ? back.cx : back.texW;
         int cy = back.cy > 0 ? back.cy : back.texH;
@@ -514,17 +527,16 @@ void MapRenderer::renderBacks(SDL_Renderer* renderer, const CameraComp& cam, boo
         if (scrollH) {
             posX += static_cast<float>(back.rx) * 5.0f * elapsed / 1000.0f;
         } else {
-            // 修复：rx是相对速率，不是叠加系数
-            // 正确公式：posX = back.x + camCenterX * rx / 100
-            posX = static_cast<float>(back.x) + static_cast<float>(camCenterX) * back.rx / 100.0f;
+            // 修复：正确公式是 (100 + rx) / 100，当rx=0时背景跟随相机
+            // C#: position.X += Camera.Center.X * (100 + back.Rx) / 100;
+            posX = static_cast<float>(back.x) + static_cast<float>(camCenterX) * (100 + back.rx) / 100.0f;
         }
         
         if (scrollV) {
             posY += static_cast<float>(back.ry) * 5.0f * elapsed / 1000.0f;
         } else {
-            // 修复：ry是相对速率，不是叠加系数
-            // 正确公式：posY = back.y + camCenterY * ry / 100
-            posY = static_cast<float>(back.y) + static_cast<float>(camCenterY) * back.ry / 100.0f;
+            // 修复：正确公式是 (100 + ry) / 100
+            posY = static_cast<float>(back.y) + static_cast<float>(camCenterY) * (100 + back.ry) / 100.0f;
         }
         
         posX = std::floor(posX);

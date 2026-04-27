@@ -95,7 +95,22 @@ bool MapRenderer::loadMap(int mapId, const std::string& wzPath) {
         PluginBase::PluginManager::RegisterStructures(structures);
     }
     
-    auto mapNode = structure->getWzNode()->getNodes()->find("Map");
+    // 从 Map.wz 结构中查找 Map 节点
+    std::shared_ptr<Wz_Node> mapRootNode;
+    for (const auto& st : structures) {
+        if (st && st->getWzNode()) {
+            auto wzName = st->getWzNode()->getText();
+            if (wzName == "Map.wz" || wzName == "Map") {
+                mapRootNode = st->getWzNode();
+                break;
+            }
+        }
+    }
+    if (!mapRootNode) {
+        mapRootNode = structure->getWzNode();
+    }
+    
+    auto mapNode = mapRootNode->getNodes()->find("Map");
     if (mapNode == structure->getWzNode()->getNodes()->end()) {
         std::cerr << "Cannot find Map node" << std::endl;
         return false;
@@ -327,21 +342,47 @@ void MapRenderer::loadBackTexture(SDL_Renderer* renderer, BackItem& back) {
     
     if (frames.empty()) return;
     
-    // 获取第一帧的尺寸和origin
+    // 获取第一帧的尺寸
     float w, h;
     SDL_GetTextureSize(frames[0], &w, &h);
     
-    auto originNode = frameNode->getNodes()->find("origin");
-    if (originNode != frameNode->getNodes()->end()) {
-        auto originVec = (*originNode)->getValue<Wz_Vector>();
-        if (originVec) {
-            back.originX = originVec->getX();
-            back.originY = originVec->getY();
+    // 从帧节点中查找 origin 和 delay（在每个帧节点下面，而不是在目录节点下）
+    for (int i = 0; i < nodeCount && i < static_cast<int>(frames.size()); i++) {
+        auto child = (*frameNodes)[i];
+        if (!child) continue;
+        
+        // 查找 origin
+        if (back.originX == 0 && back.originY == 0) {
+            auto childNodes = child->getNodes();
+            if (childNodes) {
+                auto originNode = childNodes->find("origin");
+                if (originNode != childNodes->end()) {
+                    auto originVec = (*originNode)->getValue<Wz_Vector>();
+                    if (originVec) {
+                        back.originX = originVec->getX();
+                        back.originY = originVec->getY();
+                    }
+                }
+            }
         }
+        
+        // 查找 delay（如果在 delayNode 中找不到，从帧节点中找）
+        if (frameDelay == 0) {
+            auto childNodes = child->getNodes();
+            if (childNodes) {
+                auto delayNode = childNodes->find("delay");
+                if (delayNode != childNodes->end()) {
+                    frameDelay = GetWzInt(*delayNode, 0);
+                }
+            }
+        }
+        
+        if (back.originX != 0 || back.originY != 0) break;
     }
     
     // 如果 BackItem 指定了特定帧，只保留该帧
-    if (!back.noStr.empty() || back.animFrame > 0) {
+    // noStr 或 animFrame 任一存在时，表示要显示特定帧
+    if (!back.noStr.empty() || back.animFrame != 0 || (back.ani == 0 && frames.size() > 1)) {
         std::string frameNo = back.noStr.empty() ? std::to_string(back.animFrame) : back.noStr;
         int frameIdx = 0;
         try {
@@ -373,18 +414,17 @@ void MapRenderer::loadBackTexture(SDL_Renderer* renderer, BackItem& back) {
         }
     }
     
-    // 加载帧延迟
-    auto delayNode = frameNode->getNodes()->find("delay");
-    if (delayNode != frameNode->getNodes()->end()) {
-        frameDelay = GetWzInt(*delayNode, 100);
-    }
+    // 如果还没找到 delay，使用默认值
     if (frameDelay == 0) {
         frameDelay = 100; // 默认 100ms
     }
     
+    // 先保存 frameCount，因为 move 后 frames.size() 不可预测
+    int frameCount = static_cast<int>(frames.size());
+    
     // 创建实体
     auto e = registry_.create();
-    registry_.emplace<BackComp>(e, std::move(frames), static_cast<int>(frames.size()), 0, frameDelay, 0,
+    registry_.emplace<BackComp>(e, std::move(frames), frameCount, 0, frameDelay, 0,
                             static_cast<int>(w), static_cast<int>(h),
                             back.x, back.y, back.cx, back.cy, 
                             back.rx, back.ry, back.type, back.flipX, back.front,
@@ -604,7 +644,13 @@ void MapRenderer::renderBacks(SDL_Renderer* renderer, const CameraComp& cam, boo
         bool vertical = (mode == 2 || mode == 3 || mode == 5 || mode == 7);
         bool scrollH = (mode == 4 || mode == 6);
         bool scrollV = (mode == 5 || mode == 7);
-        Uint32 elapsed = currentTime - startTime_;
+        
+        // 使用每个背景自身的累计时间（C# 中 back.View.Time 每帧累加）
+        // 在首次渲染时初始化 lastFrameTime，之后用当前帧时间减去初始 lastFrameTime
+        if (back.lastFrameTime == 0) {
+            back.lastFrameTime = currentTime;
+        }
+        Uint32 elapsed = currentTime - back.lastFrameTime;
         
         if (scrollH) {
             float scrollOffset = static_cast<float>(back.rx) * 5.0f * elapsed / 1000.0f;

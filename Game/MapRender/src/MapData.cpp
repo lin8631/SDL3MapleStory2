@@ -133,6 +133,15 @@ bool MapRenderData::load(std::shared_ptr<Wz_Node> imgNode) {
                         item.l2 = GetString(childNodes->operator[]("l2"), "");
                         item.flipX = GetInt(childNodes->operator[]("f"), 0) != 0;
                         item.light = GetInt(childNodes->operator[]("light"), 0) != 0;
+                        
+                        auto originNode = childNodes->operator[]("origin");
+                        if (originNode) {
+                            auto originNodes = originNode->getNodes();
+                            if (originNodes) {
+                                item.originX = GetInt(originNodes->operator[]("x"), 0);
+                                item.originY = GetInt(originNodes->operator[]("y"), 0);
+                            }
+                        }
                     }
                     objs.push_back(item);
                 }
@@ -165,6 +174,15 @@ bool MapRenderData::load(std::shared_ptr<Wz_Node> imgNode) {
                             item.tileNo = uNode->getString("");
                             if (item.tileNo.empty()) {
                                 item.tileNo = uNode->getText();
+                            }
+                        }
+                        
+                        auto originNode = childNodes->operator[]("origin");
+                        if (originNode) {
+                            auto originNodes = originNode->getNodes();
+                            if (originNodes) {
+                                item.originX = GetInt(originNodes->operator[]("x"), 0);
+                                item.originY = GetInt(originNodes->operator[]("y"), 0);
                             }
                         }
                     }

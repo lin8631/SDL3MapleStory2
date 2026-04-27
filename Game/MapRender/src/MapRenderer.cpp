@@ -258,13 +258,12 @@ void MapRenderer::loadBackTexture(SDL_Renderer* renderer, BackItem& back) {
     auto extracted = frameImg->getNode();
     if (!extracted || !extracted->getNodes()) return;
     
-    // 尝试多种动画类型目录：ani (帧动画), back (静态), spine (骨骼)
-    // 使用back.ani作为动画类型索引（区分于滚动模式type）
+    // C# 中 BackItem.Ani 只有 0（使用 back 目录）和 1（使用 ani 目录）
+    // spine 通过单独的 SpineAni 字段处理，不是 ani 字段
     std::string aniDir;
     switch (back.ani) {
         case 0: aniDir = "back"; break;
         case 1: aniDir = "ani"; break;
-        case 2: aniDir = "spine"; break;
         default: aniDir = "back"; break;
     }
     
@@ -320,13 +319,9 @@ void MapRenderer::loadTileTexture(SDL_Renderer* renderer, TileItem& tile) {
     if (tile.tilesetName.empty() || tile.tileNo.empty()) return;
     if (!mapData_->mapImgNode) return;
     
-    std::string tilesetPathPrefix = "Map\\Tile\\" + tile.tilesetName + ".img";
-    std::string tilesetPathForCache = "Map/Tile/" + tile.tilesetName + ".img";
+    std::string tilesetPathPrefix = "Map/Tile/" + tile.tilesetName + ".img";
     
-    auto tilesetFound = PluginBase::PluginManager::FindWz(tilesetPathPrefix + "\\");
-    if (!tilesetFound) {
-        tilesetFound = PluginBase::PluginManager::FindWz(tilesetPathForCache + "/");
-    }
+    auto tilesetFound = PluginBase::PluginManager::FindWz(tilesetPathPrefix);
     if (!tilesetFound) return;
     
     auto tilesetImg = tilesetFound->getValue<Wz_Image>();
@@ -526,7 +521,11 @@ void MapRenderer::renderBacks(SDL_Renderer* renderer, const CameraComp& cam, boo
         bool scrollV = (mode == 5 || mode == 7);
         
         if (scrollH) {
+            // C#: position.X += ((float)back.Rx * 5 * back.View.Time / 1000) % cx;
             posX += static_cast<float>(back.rx) * 5.0f * elapsed / 1000.0f;
+            if (back.cx > 0) {
+                posX = std::fmod(posX, static_cast<float>(back.cx));
+            }
         } else {
             // 修复：正确公式是 (100 + rx) / 100，当rx=0时背景跟随相机
             // C#: position.X += Camera.Center.X * (100 + back.Rx) / 100;
@@ -535,6 +534,9 @@ void MapRenderer::renderBacks(SDL_Renderer* renderer, const CameraComp& cam, boo
         
         if (scrollV) {
             posY += static_cast<float>(back.ry) * 5.0f * elapsed / 1000.0f;
+            if (back.cy > 0) {
+                posY = std::fmod(posY, static_cast<float>(back.cy));
+            }
         } else {
             // 修复：正确公式是 (100 + ry) / 100
             posY = static_cast<float>(back.y) + static_cast<float>(camCenterY) * (100 + back.ry) / 100.0f;
@@ -549,21 +551,21 @@ void MapRenderer::renderBacks(SDL_Renderer* renderer, const CameraComp& cam, boo
             if (horizontal && cx > 0) {
                 int camLeft = cam.x;
                 int camRight = cam.x + cam.w;
-                l = static_cast<int>(std::floor(static_cast<float>(camLeft - posX) / cx)) - 2;
-                r = static_cast<int>(std::ceil(static_cast<float>(camRight - posX) / cx)) + 2;
+                l = static_cast<int>(std::floor(static_cast<float>(camLeft - posX) / cx)) - 1;
+                r = static_cast<int>(std::ceil(static_cast<float>(camRight - posX) / cx)) + 1;
             }
             
             if (vertical && cy > 0) {
                 int camTop = cam.y;
                 int camBottom = cam.y + cam.h;
-                t = static_cast<int>(std::floor(static_cast<float>(camTop - posY) / cy)) - 2;
-                b = static_cast<int>(std::ceil(static_cast<float>(camBottom - posY) / cy)) + 2;
+                t = static_cast<int>(std::floor(static_cast<float>(camTop - posY) / cy)) - 1;
+                b = static_cast<int>(std::ceil(static_cast<float>(camBottom - posY) / cy)) + 1;
             }
             
             for (int ty = t; ty < b; ty++) {
                 for (int tx = l; tx < r; tx++) {
-                    float drawX = posX + cx * tx;
-                    float drawY = posY + cy * ty;
+                    float drawX = posX + cx * tx - static_cast<float>(back.originX);
+                    float drawY = posY + cy * ty - static_cast<float>(back.originY);
                     
                     int sx = static_cast<int>((drawX - cam.x) * zoom_);
                     int sy = static_cast<int>((drawY - cam.y) * zoom_);
@@ -578,8 +580,8 @@ void MapRenderer::renderBacks(SDL_Renderer* renderer, const CameraComp& cam, boo
                 }
             }
         } else {
-            int sx = static_cast<int>((posX - cam.x) * zoom_);
-            int sy = static_cast<int>((posY - cam.y) * zoom_);
+            int sx = static_cast<int>((posX - static_cast<float>(back.originX) - cam.x) * zoom_);
+            int sy = static_cast<int>((posY - static_cast<float>(back.originY) - cam.y) * zoom_);
             int sw = static_cast<int>(back.texW * zoom_);
             int sh = static_cast<int>(back.texH * zoom_);
             
@@ -599,8 +601,8 @@ void MapRenderer::renderTiles(SDL_Renderer* renderer, const CameraComp& cam, int
         if (!tile.texture) continue;
         if (tile.layer != layer) continue;
         
-        int sx = static_cast<int>((tile.x - cam.x) * zoom_);
-        int sy = static_cast<int>((tile.y - cam.y) * zoom_);
+        int sx = static_cast<int>((tile.x - tile.originX - cam.x) * zoom_);
+        int sy = static_cast<int>((tile.y - tile.originY - cam.y) * zoom_);
         int sw = static_cast<int>(tile.texW * zoom_);
         int sh = static_cast<int>(tile.texH * zoom_);
         
@@ -613,14 +615,30 @@ void MapRenderer::renderTiles(SDL_Renderer* renderer, const CameraComp& cam, int
 }
 
 void MapRenderer::renderObjs(SDL_Renderer* renderer, const CameraComp& cam, int layer) {
+    struct SortedObj {
+        entt::entity entity;
+        int z;
+    };
+    
+    std::vector<SortedObj> sortedObjs;
     auto view = registry_.view<ObjComp>();
     for (auto e : view) {
         auto& obj = registry_.get<ObjComp>(e);
         if (!obj.texture) continue;
         if (obj.layer != layer) continue;
+        sortedObjs.push_back({e, obj.z});
+    }
+    
+    std::stable_sort(sortedObjs.begin(), sortedObjs.end(), [](const SortedObj& a, const SortedObj& b) {
+        return a.z < b.z;
+    });
+    
+    for (const auto& sorted : sortedObjs) {
+        auto e = sorted.entity;
+        auto& obj = registry_.get<ObjComp>(e);
         
-        int sx = static_cast<int>((obj.x - cam.x) * zoom_);
-        int sy = static_cast<int>((obj.y - cam.y) * zoom_);
+        int sx = static_cast<int>((obj.x - obj.originX - cam.x) * zoom_);
+        int sy = static_cast<int>((obj.y - obj.originY - cam.y) * zoom_);
         int sw = static_cast<int>(obj.texW * zoom_);
         int sh = static_cast<int>(obj.texH * zoom_);
         

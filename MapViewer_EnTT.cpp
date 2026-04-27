@@ -585,55 +585,70 @@ void AppState::render() {
                 if (ImGui::TreeNode("WZ Files")) {
                     std::function<void(std::shared_ptr<Wz_Node>, int, std::string)> renderWzNode = 
                     [&](std::shared_ptr<Wz_Node> node, int depth, std::string path) {
-                        if (!node || depth > 4) return;
+                        if (!node || depth > 6) return;
                         auto nodes = node->getNodes();
                         if (nodes && nodes->getCount() > 0) {
-                            int maxItems = (depth == 0) ? 20 : (depth == 1) ? 30 : (depth == 2) ? 20 : 10;
-                            for (size_t i = 0; i < nodes->getCount() && i < maxItems; i++) {
+                            int maxItems = (depth < 2) ? 100 : (depth < 4) ? 50 : 20;
+                            size_t totalCount = nodes->getCount();
+                            bool truncated = totalCount > (size_t)maxItems;
+                            for (size_t i = 0; i < totalCount; i++) {
+                                if (i >= (size_t)maxItems) break;
                                 auto child = (*nodes)[i];
-                                if (child) {
-                                    std::string text = child->getText();
-                                    std::string childPath = path + "/" + text;
-                                    auto childNodes = child->getNodes();
-                                    if (childNodes && childNodes->getCount() > 0) {
-                                        if (ImGui::TreeNode(text.c_str())) {
-                                            renderWzNode(child, depth + 1, childPath);
-                                            ImGui::TreePop();
-                                        }
-                                    } else {
-                                        auto wzImg = child->getWzImage();
-                                        bool isSelected = (selectedNode == child);
-                                        if (ImGui::Selectable(text.c_str(), isSelected, ImGuiSelectableFlags_None)) {
-                                            if (wzImg) {
-                                                wzImg->tryExtract();
-                                                auto extractedNode = wzImg->getNode();
-                                                if (extractedNode) {
-                                                    selectedNode = extractedNode;
-                                                    selectedNodeTitle = childPath;
-                                                } else {
-                                                    selectedNode = child;
-                                                    selectedNodeTitle = childPath;
-                                                }
+                                if (!child) continue;
+                                
+                                std::string text = child->getText();
+                                std::string childPath = path + "/" + text;
+                                auto childNodes = child->getNodes();
+                                
+                                ImGui::PushID((void*)child.get());
+                                bool hasChildren = childNodes && childNodes->getCount() > 0;
+                                
+                                if (hasChildren) {
+                                    if (ImGui::TreeNode(text.c_str())) {
+                                        renderWzNode(child, depth + 1, childPath);
+                                        ImGui::TreePop();
+                                    }
+                                } else {
+                                    auto wzImg = child->getWzImage();
+                                    bool isSelected = (selectedNode == child);
+                                    if (ImGui::Selectable(text.c_str(), isSelected, ImGuiSelectableFlags_None)) {
+                                        if (wzImg) {
+                                            wzImg->tryExtract();
+                                            auto extractedNode = wzImg->getNode();
+                                            if (extractedNode) {
+                                                selectedNode = extractedNode;
+                                                selectedNodeTitle = childPath;
                                             } else {
                                                 selectedNode = child;
                                                 selectedNodeTitle = childPath;
                                             }
+                                        } else {
+                                            selectedNode = child;
+                                            selectedNodeTitle = childPath;
                                         }
                                     }
                                 }
+                                ImGui::PopID();
+                            }
+                            if (truncated) {
+                                ImGui::SameLine();
+                                ImGui::TextColored(ImVec4(1, 0.5, 0, 1), "... +%zu more", totalCount - maxItems);
                             }
                         }
                     };
                     
                     if (!wzFiles.empty()) {
+                        size_t totalFiles = wzFiles.size();
+                        size_t maxFiles = 20;
                         int shown = 0;
-                        for (size_t i = 0; i < wzFiles.size() && shown < 20; i++) {
+                        for (size_t i = 0; i < totalFiles && shown < (int)maxFiles; i++) {
                             if (!wzFiles[i] || !wzFiles[i]->getHeader()) continue;
                             if (wzFiles[i]->getIsSubDir()) continue;
                             
                             std::string fullPath = wzFiles[i]->getHeader()->getFileName();
                             std::string fileName = std::filesystem::path(fullPath).filename().string();
                             
+                            ImGui::PushID((void*)wzFiles[i].get());
                             auto wzNode = wzFiles[i]->getNode();
                             if (wzNode && wzNode->getNodes() && wzNode->getNodes()->getCount() > 0) {
                                 if (ImGui::TreeNode(fileName.c_str())) {
@@ -643,9 +658,12 @@ void AppState::render() {
                             } else {
                                 ImGui::Text("%s", fileName.c_str());
                             }
+                            ImGui::PopID();
                             shown++;
                         }
-                        ImGui::Text("... Total: %zu files (%d shown)", wzFiles.size(), shown);
+                        if (totalFiles > (size_t)shown) {
+                            ImGui::TextColored(ImVec4(1, 0.5, 0, 1), "... +%zu more files", totalFiles - shown);
+                        }
                     } else {
                         ImGui::Text("No WZ files loaded");
                     }
@@ -667,24 +685,36 @@ void AppState::render() {
                         if (displayNode && displayNode->getNodes()) {
                             std::function<void(std::shared_ptr<Wz_Node>, int)> renderWzNode2 = 
                             [&](std::shared_ptr<Wz_Node> node, int depth) {
-                                if (!node || depth > 4) return;
+                                if (!node || depth > 6) return;
                                 auto nodes = node->getNodes();
                                 if (nodes && nodes->getCount() > 0) {
-                                    int maxItems = (depth == 0) ? 50 : (depth == 1) ? 30 : (depth == 2) ? 20 : 10;
-                                    for (size_t i = 0; i < nodes->getCount() && i < maxItems; i++) {
+                                    int maxItems = (depth < 2) ? 100 : (depth < 4) ? 50 : 20;
+                                    size_t totalCount = nodes->getCount();
+                                    bool truncated = totalCount > (size_t)maxItems;
+                                    for (size_t i = 0; i < totalCount; i++) {
+                                        if (i >= (size_t)maxItems) break;
                                         auto child = (*nodes)[i];
-                                        if (child) {
-                                            std::string text = child->getText();
-                                            auto childNodes = child->getNodes();
-                                            if (childNodes && childNodes->getCount() > 0) {
-                                                if (ImGui::TreeNode(text.c_str())) {
-                                                    renderWzNode2(child, depth + 1);
-                                                    ImGui::TreePop();
-                                                }
-                                            } else {
-                                                ImGui::Text("%s", text.c_str());
+                                        if (!child) continue;
+                                        
+                                        std::string text = child->getText();
+                                        auto childNodes = child->getNodes();
+                                        
+                                        ImGui::PushID((void*)child.get());
+                                        bool hasChildren = childNodes && childNodes->getCount() > 0;
+                                        
+                                        if (hasChildren) {
+                                            if (ImGui::TreeNode(text.c_str())) {
+                                                renderWzNode2(child, depth + 1);
+                                                ImGui::TreePop();
                                             }
+                                        } else {
+                                            ImGui::Text("%s", text.c_str());
                                         }
+                                        ImGui::PopID();
+                                    }
+                                    if (truncated) {
+                                        ImGui::SameLine();
+                                        ImGui::TextColored(ImVec4(1, 0.5, 0, 1), "... +%zu more", totalCount - maxItems);
                                     }
                                 }
                             };

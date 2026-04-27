@@ -69,7 +69,16 @@ void WzBrowserWindow::render(const WzBrowserState& state) {
                         
                         ImGui::PushID((void*)child.get());
                         
-                        if (hasChildNodes) {
+                        // img节点优先判断：始终显示为Selectable，不展开子节点
+                        if (isWzImage) {
+                            bool isSelected = (selectedNode == child);
+                            if (ImGui::Selectable(text.c_str(), isSelected, ImGuiSelectableFlags_None)) {
+                                selectedNode = child;
+                                selectedNodeTitle = childPath;
+                                if (wzImg) wzImg->tryExtract();
+                            }
+                        } else if (hasChildNodes) {
+                            // 非img目录：有子节点时展开为TreeNode
                             bool nodeOpen = ImGui::TreeNode((void*)child.get(), "%s", text.c_str());
                             if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
                                 selectedNode = child;
@@ -78,13 +87,6 @@ void WzBrowserWindow::render(const WzBrowserState& state) {
                             if (nodeOpen) {
                                 self(self, child, depth + 1, childPath);
                                 ImGui::TreePop();
-                            }
-                        } else if (isWzImage) {
-                            bool isSelected = (selectedNode == child);
-                            if (ImGui::Selectable(text.c_str(), isSelected, ImGuiSelectableFlags_None)) {
-                                selectedNode = child;
-                                selectedNodeTitle = childPath;
-                                if (wzImg) wzImg->tryExtract();
                             }
                         } else {
                             ImGui::Text("%s", text.c_str());

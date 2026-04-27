@@ -47,6 +47,12 @@ set(ENGINE_INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/UI/include
     ${CMAKE_SOURCE_DIR}/Entt/single_include
     ${CMAKE_SOURCE_DIR}/../include
+    ${CMAKE_SOURCE_DIR}/Engine/Scene/include
+)
+
+# Source directories - add WzBrowserWindow source
+set(SCENE_SOURCES_DIR
+    ${CMAKE_SOURCE_DIR}/Engine/Scene/src
 )
 
 include_directories(${ENGINE_INCLUDE_DIRS})
@@ -72,12 +78,17 @@ set(UI_SOURCES
     UI/src/UI.cpp
 )
 
+set(SCENE_SOURCES
+    Scene/src/WzBrowserWindow.cpp
+)
+
 # Main library
 add_library(MapleEngine STATIC
     ${CORE_SOURCES}
     ${RENDERER_SOURCES}
     ${MAPRENDER_SOURCES}
     ${UI_SOURCES}
+    ${SCENE_SOURCES}
 )
 
 # 链接 SDL3 和 X11 (静态)

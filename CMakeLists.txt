@@ -128,6 +128,7 @@ add_executable(MapViewer_EnTT
     Game/MapRender/src/MapData.cpp
     Game/MapRender/src/ResourceLoader.cpp
     Game/MapRender/src/TextureCache.cpp
+    Engine/Scene/src/WzBrowserWindow.cpp
 )
 target_sources(MapViewer_EnTT PRIVATE)
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Engine/imgui/CMakeLists.txt")
@@ -180,6 +181,7 @@ target_include_directories(MapViewer_EnTT PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine/EnTT/single_include
     # SDL3
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine/SDL/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/Engine/SDL3_install/include
     # ImGui now provided locally; do not rely on imgui_SOURCE_DIR
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine/wzlib/mio_include
     ${CMAKE_CURRENT_SOURCE_DIR}/Game/WzLib/mio/include
@@ -190,6 +192,7 @@ target_include_directories(MapViewer_EnTT PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine/Renderer/include
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine/Core/include
     ${CMAKE_CURRENT_SOURCE_DIR}/Engine/Animation/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/Game/WzLib
 )
 
 # Unit tests (注释掉)

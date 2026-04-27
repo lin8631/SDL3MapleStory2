@@ -571,7 +571,7 @@ void AppState::render() {
 
                 // 第一列：WZ文件列表
                 ImGui::TableNextColumn();
-                {
+                if (ImGui::BeginChild("##col1")) {
                     std::function<void(std::shared_ptr<Wz_Node>, int, std::string)> renderWzNode = 
                     [&](std::shared_ptr<Wz_Node> node, int depth, std::string path) {
                         if (!node || depth > 6) return;
@@ -679,9 +679,11 @@ void AppState::render() {
                         ImGui::Text("No WZ files loaded");
                     }
                 }
+                ImGui::EndChild();
 
                 // 第二列：选中节点的内容
                 ImGui::TableNextColumn();
+                if (ImGui::BeginChild("##col2")) {
                 {
                     auto displayNode = selectedNode ? selectedNode : mapNode;
                     if (displayNode && displayNode->getNodes()) {
@@ -729,7 +731,9 @@ void AppState::render() {
                             };
                             renderWzNode2(displayNode, 0);
                         }
+                    }
                 }
+                ImGui::EndChild();
 
                 // 第三列：渲染信息
                 ImGui::TableNextColumn();

@@ -2,8 +2,6 @@
 #include "imgui.h"
 
 #include <filesystem>
-#include <thread>
-#include <chrono>
 
 #include "Wz_Node.hpp"
 #include "Wz_Structure.hpp"
@@ -25,15 +23,6 @@ int getMaxItemsForDepth(int depth) {
     if (depth < 2) return MAX_ITEMS_DEPTH_0_1;
     if (depth < 4) return MAX_ITEMS_DEPTH_2_3;
     return MAX_ITEMS_DEPTH_4_6;
-}
-
-void extractWzImageAsync(std::shared_ptr<Wz_Image> wzImg) {
-    if (wzImg) {
-        std::thread([wzImg]() {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            wzImg->tryExtract();
-        }).detach();
-    }
 }
 
 }
@@ -81,11 +70,12 @@ void WzBrowserWindow::render(const WzBrowserState& state) {
                         ImGui::PushID((void*)child.get());
                         
                         if (hasChildNodes) {
-                            if (ImGui::TreeNode((void*)child.get(), "%s", text.c_str())) {
-                                if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-                                    selectedNode = child;
-                                    selectedNodeTitle = childPath;
-                                }
+                            bool nodeOpen = ImGui::TreeNode((void*)child.get(), "%s", text.c_str());
+                            if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+                                selectedNode = child;
+                                selectedNodeTitle = childPath;
+                            }
+                            if (nodeOpen) {
                                 self(self, child, depth + 1, childPath);
                                 ImGui::TreePop();
                             }
@@ -94,7 +84,7 @@ void WzBrowserWindow::render(const WzBrowserState& state) {
                             if (ImGui::Selectable(text.c_str(), isSelected, ImGuiSelectableFlags_None)) {
                                 selectedNode = child;
                                 selectedNodeTitle = childPath;
-                                extractWzImageAsync(wzImg);
+                                if (wzImg) wzImg->tryExtract();
                             }
                         } else {
                             ImGui::Text("%s", text.c_str());
@@ -114,11 +104,12 @@ void WzBrowserWindow::render(const WzBrowserState& state) {
                 if (baseNode && baseNode->getNodes() && baseNode->getNodes()->getCount() > 0) {
                     std::string rootName = "base.wz";
                     ImGui::PushID((void*)baseNode.get());
-                    if (ImGui::TreeNode((void*)baseNode.get(), "%s", rootName.c_str())) {
-                        if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-                            selectedNode = baseNode;
-                            selectedNodeTitle = rootName;
-                        }
+                    bool nodeOpen = ImGui::TreeNode((void*)baseNode.get(), "%s", rootName.c_str());
+                    if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+                        selectedNode = baseNode;
+                        selectedNodeTitle = rootName;
+                    }
+                    if (nodeOpen) {
                         renderWzNode(renderWzNode, baseNode, 0, rootName);
                         ImGui::TreePop();
                     }
@@ -137,11 +128,12 @@ void WzBrowserWindow::render(const WzBrowserState& state) {
                         auto wzNode = wzFiles[i]->getNode();
                         bool hasChildren = wzNode && wzNode->getNodes() && wzNode->getNodes()->getCount() > 0;
                         if (hasChildren) {
-                            if (ImGui::TreeNode((void*)wzFiles[i].get(), "%s", fileName.c_str())) {
-                                if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-                                    selectedNode = wzNode;
-                                    selectedNodeTitle = fileName;
-                                }
+                            bool nodeOpen = ImGui::TreeNode((void*)wzFiles[i].get(), "%s", fileName.c_str());
+                            if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+                                selectedNode = wzNode;
+                                selectedNodeTitle = fileName;
+                            }
+                            if (nodeOpen) {
                                 renderWzNode(renderWzNode, wzNode, 0, fileName);
                                 ImGui::TreePop();
                             }
@@ -186,11 +178,16 @@ void WzBrowserWindow::render(const WzBrowserState& state) {
                             bool isWzImage = wzImg != nullptr;
                             
                             ImGui::PushID((void*)child.get());
+                            // 第二列逻辑：有子节点且非img -> 可以展开的TreeNode
+                            // img节点或其他情况 -> 只读文本
                             if (hasChildNodes && !isWzImage) {
                                 if (ImGui::TreeNode((void*)child.get(), "%s", text.c_str())) {
                                     self(self, child, depth + 1);
                                     ImGui::TreePop();
                                 }
+                            } else if (isWzImage) {
+                                // img节点：只读显示文本（不解压不点击）
+                                ImGui::Text("%s", text.c_str());
                             } else {
                                 ImGui::Text("%s", text.c_str());
                             }
@@ -209,6 +206,11 @@ void WzBrowserWindow::render(const WzBrowserState& state) {
         // 第三列：渲染信息（添加独立滚动区域）
         ImGui::TableNextColumn();
         if (ImGui::BeginChild("##col3")) {
+            ImGui::Text("Selected:");
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.3f, 1.0f), "%s", 
+                selectedNodeTitle.empty() ? "(none)" : selectedNodeTitle.c_str());
+            ImGui::Separator();
             ImGui::Text("Zoom: %.2f", state.zoom);
             ImGui::Text("Camera: (%d, %d)", state.cameraX, state.cameraY);
             ImGui::Separator();

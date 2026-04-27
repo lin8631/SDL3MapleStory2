@@ -110,7 +110,7 @@ public:
     // 已加载的WZ文件列表
     std::vector<std::shared_ptr<Wz_File>> wzFiles;
     int loadedMapID = 100000000;
-    std::string wzPath = "/home/ltj/MapleStory/072/Data";
+    std::string wzPath;
     
     // 选中节点
     std::shared_ptr<Wz_Node> selectedNode;
@@ -186,19 +186,17 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     std::cout << "[MapViewer_EnTT(SDL_AppInit)]: MapViewer_EnTT PNG纹理渲染 (SDL_MAIN_USE_CALLBACKS)" << std::endl;
 
     // 解析命令行参数
-    std::string wzPath = "/home/ltj/MapleStory/072/Data";
+    std::string wzPath;
     int mapID = 100000000;
     
     for (int i = 1; i < argc; i++) {
         if (argv[i][0] == '-') {
-            // 选项标志
             if (strcmp(argv[i], "-path") == 0 || strcmp(argv[i], "--path") == 0) {
                 if (i + 1 < argc) wzPath = argv[++i];
             } else if (strcmp(argv[i], "-map") == 0 || strcmp(argv[i], "--map") == 0) {
                 if (i + 1 < argc) mapID = std::stoi(argv[++i]);
             }
         } else {
-            // 位置参数：尝试解析为数字，否则为路径
             try {
                 size_t pos;
                 int parsed = std::stoi(argv[i], &pos);
@@ -213,6 +211,32 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
         }
     }
     
+    // 如果未传入路径，使用默认路径 "./Data"
+    if (wzPath.empty()) {
+        wzPath = "./Data";
+    }
+    
+    // 检查目录是否存在
+    if (!std::filesystem::exists(wzPath) || !std::filesystem::is_directory(wzPath)) {
+        std::cerr << "错误：传入的WZ路径不存在或者为空，请检查目录: " << wzPath << std::endl;
+        std::cerr << "用法：MapViewer_EnTT [路径] [地图ID]" << std::endl;
+        return SDL_APP_FAILURE;
+    }
+    
+    // 检查目录中是否有 .wz 文件
+    bool hasWzFiles = false;
+    for (const auto& entry : std::filesystem::directory_iterator(wzPath)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".wz") {
+            hasWzFiles = true;
+            break;
+        }
+    }
+    if (!hasWzFiles) {
+        std::cerr << "Error: No .wz files found in directory: " << wzPath << std::endl;
+        std::cerr << "用法：MapViewer_EnTT [路径] [地图ID]" << std::endl;
+        return SDL_APP_FAILURE;
+    }
+    
     app->wzPath = wzPath;
     app->loadedMapID = mapID;
 
@@ -221,9 +245,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
         return SDL_APP_FAILURE;
     }
 
-    std::cout << "Usage: MapViewer_EnTT [path] [mapid] [-path <path>] [-map <id>]" << std::endl;
-    std::cout << "  Default path: " << wzPath << std::endl;
-    std::cout << "  Default map: " << mapID << std::endl;
+    std::cout << "WZ Path: " << wzPath << ", Map ID: " << mapID << std::endl;
     std::cout << "WASD/方向键移动，ESC 退出，+/- 调整缩放" << std::endl;
     std::cout << "4=切换背景, 5=切换瓦片, 6=切换对象, 1/2/3=切换其他元素" << std::endl;
     std::cout << "============================================" << std::endl;

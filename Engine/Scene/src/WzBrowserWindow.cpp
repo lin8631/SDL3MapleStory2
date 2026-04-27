@@ -64,25 +64,41 @@ void WzBrowserWindow::render(const WzBrowserState& state) {
                         auto childNodes = child->getNodes();
                         auto wzImg = child->getWzImage();
                         
-                        bool hasChildNodes = childNodes && childNodes->getCount() > 0;
-                        bool isWzImage = wzImg != nullptr;
+                        // 综合判断：优先使用 getWzImage()，备用地使用名称判断
+                        bool wzImgExists = wzImg != nullptr;
+                        bool textEndsWithImg = (text.length() > 4 && text.substr(text.length() - 4) == ".img");
+                        
+                        // img节点：wzImg存在 OR 名称以.img结尾
+                        bool isImgNode = wzImgExists || textEndsWithImg;
+                        
+                        // 只有非img且有子节点才能展开
+                        bool hasChildren = childNodes && childNodes->getCount() > 0;
+                        bool canExpand = !isImgNode && hasChildren;
                         
                         ImGui::PushID((void*)child.get());
                         
-                        // img节点优先判断：始终显示为Selectable，不展开子节点
-                        if (isWzImage) {
-                            bool isSelected = (selectedNode == child);
+                        // img节点始终显示为Selectable，不展开
+                        if (isImgNode) {
+                            // 使用外壳节点用于高亮判断
+                            bool isSelected = (selectedImgNode == child);
                             if (ImGui::Selectable(text.c_str(), isSelected, ImGuiSelectableFlags_None)) {
-                                selectedNode = child;
                                 selectedNodeTitle = childPath;
-                                if (wzImg) wzImg->tryExtract();
+                                selectedNode = nullptr; // 清空目录高亮
+                                selectedImgNode = child; // 记录外壳节点用于高亮
+                                if (wzImg && wzImg->tryExtract()) {
+                                    displayNode = wzImg->getNode(); // 第二列显示解压后的内容
+                                } else {
+                                    displayNode = nullptr; // 解压失败时清空
+                                }
                             }
-                        } else if (hasChildNodes) {
-                            // 非img目录：有子节点时展开为TreeNode
+                        } else if (canExpand) {
+                            // 只有非img目录且有子节点时才能展开为TreeNode
                             bool nodeOpen = ImGui::TreeNode((void*)child.get(), "%s", text.c_str());
                             if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
                                 selectedNode = child;
                                 selectedNodeTitle = childPath;
+                                displayNode = nullptr; // 清空第二列显示
+                                selectedImgNode = nullptr; // 清空img高亮
                             }
                             if (nodeOpen) {
                                 self(self, child, depth + 1, childPath);
@@ -110,6 +126,8 @@ void WzBrowserWindow::render(const WzBrowserState& state) {
                     if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
                         selectedNode = baseNode;
                         selectedNodeTitle = rootName;
+                        displayNode = nullptr;
+                        selectedImgNode = nullptr;
                     }
                     if (nodeOpen) {
                         renderWzNode(renderWzNode, baseNode, 0, rootName);
@@ -134,6 +152,8 @@ void WzBrowserWindow::render(const WzBrowserState& state) {
                             if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
                                 selectedNode = wzNode;
                                 selectedNodeTitle = fileName;
+                                displayNode = nullptr;
+                                selectedImgNode = nullptr;
                             }
                             if (nodeOpen) {
                                 renderWzNode(renderWzNode, wzNode, 0, fileName);
@@ -158,8 +178,8 @@ void WzBrowserWindow::render(const WzBrowserState& state) {
         // 第二列：选中节点的内容
         ImGui::TableNextColumn();
         if (ImGui::BeginChild("##col2")) {
-            auto displayNode = selectedNode ? selectedNode : state.mapNode;
-            if (displayNode && displayNode->getNodes()) {
+            auto col2Node = displayNode ? displayNode : state.mapNode;
+            if (col2Node && col2Node->getNodes()) {
                 auto renderWzNode2 = [&](auto&& self, std::shared_ptr<Wz_Node> node, int depth) -> void {
                     if (!node || depth > MAX_DEPTH) return;
                     auto nodes = node->getNodes();
@@ -200,7 +220,7 @@ void WzBrowserWindow::render(const WzBrowserState& state) {
                         }
                     }
                 };
-                renderWzNode2(renderWzNode2, displayNode, 0);
+                renderWzNode2(renderWzNode2, col2Node, 0);
             }
         }
         ImGui::EndChild();

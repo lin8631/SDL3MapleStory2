@@ -52,4 +52,10 @@ private:
 
     std::shared_ptr<WzLibCpp::Wz_Node> selectedNode;
     std::string selectedNodeTitle;
+    
+    // 记录用户点击的img外壳节点，用于高亮判断
+    std::shared_ptr<WzLibCpp::Wz_Node> selectedImgNode;
+    
+    // 第二列显示的节点（解压后的内容）
+    std::shared_ptr<WzLibCpp::Wz_Node> displayNode;
 };

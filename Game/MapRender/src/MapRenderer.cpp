@@ -64,7 +64,7 @@ bool MapRenderer::loadMap(int mapId, const std::string& wzPath) {
     
     auto file = structure->loadFile(baseWzPath, rootNode, true, false);
     if (!file) {
-        std::cerr << "Failed to load Base.wz" << std::endl;
+        SDL_LogWarn(0, "[MapRenderer] Failed to load Base.wz");
         return false;
     }
     
@@ -76,34 +76,26 @@ bool MapRenderer::loadMap(int mapId, const std::string& wzPath) {
         return false;
     }
     
+    // 地图路径：Map/Map{folderNum}/{mapId:D9}.img（无subFolder层）
     int folderNum = mapId / 100000000;
-    auto mapFolder = (*mapNode)->getNodes()->find("Map" + std::to_string(folderNum));
+    std::string folderName = "Map" + std::to_string(folderNum);
+    auto mapFolder = (*mapNode)->getNodes()->find(folderName);
     if (mapFolder == (*mapNode)->getNodes()->end()) {
-        std::cerr << "Cannot find Map folder: Map" << folderNum << std::endl;
+        std::cerr << "Cannot find Map folder: " << folderName << std::endl;
         return false;
     }
     
-    int subFolder = (mapId / 10000) % 100;
-    auto subFolderNode = (*mapFolder)->getNodes()->find(std::to_string(subFolder));
-    if (subFolderNode == (*mapFolder)->getNodes()->end()) {
-        std::cerr << "Cannot find sub folder: " << subFolder << std::endl;
-        return false;
-    }
-    
-    std::string imgName = std::to_string(mapId) + ".img";
-    auto imgNode = (*subFolderNode)->getNodes()->find(imgName);
-    if (imgNode == (*subFolderNode)->getNodes()->end()) {
+    // 使用9位数字格式（补零）
+    char imgName[32];
+    snprintf(imgName, sizeof(imgName), "%09d.img", mapId);
+    auto imgNode = (*mapFolder)->getNodes()->find(imgName);
+    if (imgNode == (*mapFolder)->getNodes()->end()) {
         std::cerr << "Cannot find map image: " << imgName << std::endl;
         return false;
     }
     
-    std::shared_ptr<Wz_Image> wzImg;
-    auto node = *imgNode;
-    while (node) {
-        wzImg = std::dynamic_pointer_cast<Wz_Image>(node);
-        if (wzImg) break;
-        node = node->getParentNode().lock();
-    }
+    // 正确获取Wz_Image：使用getWzImage()方法而不是dynamic_pointer_cast
+    std::shared_ptr<Wz_Image> wzImg = (*imgNode)->getWzImage();
     if (!wzImg) {
         std::cerr << "Failed to get Wz_Image" << std::endl;
         return false;
@@ -206,28 +198,32 @@ void MapRenderer::loadTextures(SDL_Renderer* renderer) {
 }
 
 void MapRenderer::unloadTextures() {
-    auto view = registry_.view<BackComp, TileComp, ObjComp>();
-    for (auto e : view) {
-        if (registry_.all_of<BackComp>(e)) {
-            auto& back = registry_.get<BackComp>(e);
-            if (back.texture) {
-                SDL_DestroyTexture(back.texture);
-                back.texture = nullptr;
-            }
+    // 使用三个独立的view分别处理，修复之前的view逻辑错误（同时拥有三个组件的实体不存在）
+    
+    // BackComp
+    for (auto e : registry_.view<BackComp>()) {
+        auto& back = registry_.get<BackComp>(e);
+        if (back.texture) {
+            SDL_DestroyTexture(back.texture);
+            back.texture = nullptr;
         }
-        if (registry_.all_of<TileComp>(e)) {
-            auto& tile = registry_.get<TileComp>(e);
-            if (tile.texture) {
-                SDL_DestroyTexture(tile.texture);
-                tile.texture = nullptr;
-            }
+    }
+    
+    // TileComp
+    for (auto e : registry_.view<TileComp>()) {
+        auto& tile = registry_.get<TileComp>(e);
+        if (tile.texture) {
+            SDL_DestroyTexture(tile.texture);
+            tile.texture = nullptr;
         }
-        if (registry_.all_of<ObjComp>(e)) {
-            auto& obj = registry_.get<ObjComp>(e);
-            if (obj.texture) {
-                SDL_DestroyTexture(obj.texture);
-                obj.texture = nullptr;
-            }
+    }
+    
+    // ObjComp
+    for (auto e : registry_.view<ObjComp>()) {
+        auto& obj = registry_.get<ObjComp>(e);
+        if (obj.texture) {
+            SDL_DestroyTexture(obj.texture);
+            obj.texture = nullptr;
         }
     }
     
@@ -258,9 +254,23 @@ void MapRenderer::loadBackTexture(SDL_Renderer* renderer, BackItem& back) {
     auto extracted = frameImg->getNode();
     if (!extracted || !extracted->getNodes()) return;
     
-    auto frameNode = extracted->getNodes()->operator[]("ani");
+    // 尝试多种动画类型目录：ani (帧动画), back (静态), spine (骨骼)
+    // 使用back.type作为动画类型索引
+    std::string aniDir;
+    switch (back.type) {
+        case 0: aniDir = "back"; break;
+        case 1: aniDir = "ani"; break;
+        case 2: aniDir = "spine"; break;
+        default: aniDir = "back"; break;
+    }
+    
+    auto frameNode = extracted->getNodes()->operator[](aniDir);
     if (!frameNode || !frameNode->getNodes()) {
-        frameNode = extracted;
+        // 如果指定类型不存在，尝试ani
+        frameNode = extracted->getNodes()->operator[]("ani");
+        if (!frameNode || !frameNode->getNodes()) {
+            frameNode = extracted;
+        }
     }
     
     std::string frameNo = std::to_string(back.animFrame);
@@ -317,10 +327,12 @@ void MapRenderer::loadTileTexture(SDL_Renderer* renderer, TileItem& tile) {
     auto tilesetRoot = tilesetImg->getNode();
     if (!tilesetRoot || !tilesetRoot->getNodes()) return;
     
-    auto uFolderNode = tilesetRoot->getNodes()->operator[](tile.tileNo);
+    // 正确路径：Map\Tile\{TS}.img\{U}\{No}
+    // 先U（类型分类），再No（编号）
+    auto uFolderNode = tilesetRoot->getNodes()->operator[](std::to_string(tile.u));
     if (!uFolderNode || !uFolderNode->getNodes()) return;
     
-    auto tileEntryNode = uFolderNode->getNodes()->operator[](std::to_string(tile.u));
+    auto tileEntryNode = uFolderNode->getNodes()->operator[](tile.tileNo);
     if (!tileEntryNode) {
         tileEntryNode = uFolderNode->getNodes()->operator[]("0");
     }
@@ -397,7 +409,8 @@ void MapRenderer::loadObjTexture(SDL_Renderer* renderer, ObjItem& obj) {
     
     std::vector<std::string> pathParts = {obj.l0, obj.l1, obj.l2};
     for (const auto& part : pathParts) {
-        if (part.empty() || part == "0") continue;
+        // 修复：不再跳过"0"节点，"0"是完全合法的wz节点名称
+        if (part.empty()) continue;
         if (!current->getNodes()) {
             SDL_Log("[MapRenderer(loadObjTexture)] FAIL: %s - no children at '%s'", pathKey.c_str(), part.c_str());
             return;
@@ -496,13 +509,17 @@ void MapRenderer::renderBacks(SDL_Renderer* renderer, const CameraComp& cam, boo
         if (scrollH) {
             posX += static_cast<float>(back.rx) * 5.0f * elapsed / 1000.0f;
         } else {
-            posX += static_cast<float>(camCenterX) * (100 + back.rx) / 100.0f;
+            // 修复：rx是相对速率，不是叠加系数
+            // 正确公式：posX = back.x + camCenterX * rx / 100
+            posX = static_cast<float>(back.x) + static_cast<float>(camCenterX) * back.rx / 100.0f;
         }
         
         if (scrollV) {
             posY += static_cast<float>(back.ry) * 5.0f * elapsed / 1000.0f;
         } else {
-            posY += static_cast<float>(camCenterY) * (100 + back.ry) / 100.0f;
+            // 修复：ry是相对速率，不是叠加系数
+            // 正确公式：posY = back.y + camCenterY * ry / 100
+            posY = static_cast<float>(back.y) + static_cast<float>(camCenterY) * back.ry / 100.0f;
         }
         
         posX = std::floor(posX);

@@ -560,18 +560,9 @@ void AppState::render() {
 
     // 创建调试窗口
     if (showDebugWindow) {
-        if (!ImGui::Begin("WZ Resource Browser", &showDebugWindow, ImGuiWindowFlags_MenuBar)) {
+        if (!ImGui::Begin("WZ Resource Browser", &showDebugWindow)) {
             ImGui::End();
         } else {
-            // 菜单栏
-            if (ImGui::BeginMenuBar()) {
-                if (ImGui::BeginMenu("View")) {
-                    ImGui::MenuItem("Resource Browser", "Tab", &showDebugWindow);
-                    ImGui::EndMenu();
-                }
-                ImGui::EndMenuBar();
-            }
-
             // 三列布局
             if (ImGui::BeginTable("trees", 3, ImGuiTableFlags_Resizable | ImGuiTableFlags_NoKeepColumnsVisible)) {
                 ImGui::TableSetupColumn("WZ Files", ImGuiTableColumnFlags_WidthFixed, 250.0f);

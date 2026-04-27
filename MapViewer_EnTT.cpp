@@ -606,33 +606,40 @@ void AppState::render() {
                                 bool canExpand = hasChildNodes || isWzImage;
                                 
                                 ImGui::PushID((void*)child.get());
-                                if (canExpand) {
+                                
+                                // 双击选中任意节点，无论是否有子节点
+                                if (!selectedNodeTitle.empty() && selectedNodeTitle == childPath) {
+                                    ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+                                }
+                                
+                                if (hasChildNodes) {
+                                    // 有子节点的目录：渲染为可展开的树节点
                                     if (ImGui::TreeNode((void*)child.get(), "%s", text.c_str())) {
-                                        if (isWzImage && !hasChildNodes) {
-                                            if (wzImg->tryExtract()) {
-                                                auto extractedNode = wzImg->getNode();
-                                                if (extractedNode) {
-                                                    renderWzNode(extractedNode, depth + 1, childPath);
-                                                    ImGui::TreePop();
-                                                    ImGui::PopID();
-                                                    continue;
-                                                }
-                                            }
+                                        // 点击展开时设置为选中节点（用于中间列显示）
+                                        if (selectedNode != child) {
+                                            selectedNode = child;
+                                            selectedNodeTitle = childPath;
                                         }
                                         renderWzNode(child, depth + 1, childPath);
                                         ImGui::TreePop();
                                     }
-                                } else {
+                                } else if (isWzImage) {
+                                    // WZ图像(.img)节点：渲染为可选择的项目，点击选中但不展开
                                     bool isSelected = (selectedNode == child);
                                     if (ImGui::Selectable(text.c_str(), isSelected, ImGuiSelectableFlags_None)) {
                                         selectedNode = child;
                                         selectedNodeTitle = childPath;
+                                        // 解压并显示内容
+                                        wzImg->tryExtract();
                                     }
+                                } else {
+                                    // 叶子节点：纯文本显示
+                                    ImGui::Text("%s", text.c_str());
                                 }
+                                
                                 ImGui::PopID();
                             }
                             if (truncated) {
-                                ImGui::SameLine();
                                 ImGui::TextColored(ImVec4(1, 0.5, 0, 1), "... +%zu more", totalCount - maxItems);
                             }
                         }
@@ -675,14 +682,14 @@ void AppState::render() {
                 // 第二列：选中节点的内容
                 ImGui::TableNextColumn();
                 {
-                    char title[64];
+                    std::string title;
                     if (selectedNodeTitle.empty()) {
-                        snprintf(title, sizeof(title), "Map\\%d.img", loadedMapID);
+                        title = "Map\\" + std::to_string(loadedMapID) + ".img";
                     } else {
-                        snprintf(title, sizeof(title), "%s", selectedNodeTitle.c_str());
+                        title = selectedNodeTitle;
                     }
                     ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-                    if (ImGui::TreeNode(title)) {
+                    if (ImGui::TreeNode(title.c_str())) {
                         auto displayNode = selectedNode ? selectedNode : mapNode;
                         if (displayNode && displayNode->getNodes()) {
                             std::function<void(std::shared_ptr<Wz_Node>, int)> renderWzNode2 = 
@@ -704,24 +711,18 @@ void AppState::render() {
                                         
                                         bool hasChildNodes = childNodes && childNodes->getCount() > 0;
                                         bool isWzImage = wzImg != nullptr;
-                                        bool canExpand = hasChildNodes || isWzImage;
                                         
                                         ImGui::PushID((void*)child.get());
-                                        if (canExpand) {
+                                        if (hasChildNodes) {
                                             if (ImGui::TreeNode((void*)child.get(), "%s", text.c_str())) {
-                                                if (isWzImage && !hasChildNodes) {
-                                                    if (wzImg->tryExtract()) {
-                                                        auto extractedNode = wzImg->getNode();
-                                                        if (extractedNode) {
-                                                            renderWzNode2(extractedNode, depth + 1);
-                                                            ImGui::TreePop();
-                                                            ImGui::PopID();
-                                                            continue;
-                                                        }
-                                                    }
-                                                }
                                                 renderWzNode2(child, depth + 1);
                                                 ImGui::TreePop();
+                                            }
+                                        } else if (isWzImage) {
+                                            // WZ图像：点击时解压并在子节点显示
+                                            bool isSelected = (selectedNode == child);
+                                            if (ImGui::Selectable(text.c_str(), isSelected, ImGuiSelectableFlags_None)) {
+                                                wzImg->tryExtract();
                                             }
                                         } else {
                                             ImGui::Text("%s", text.c_str());
@@ -729,7 +730,6 @@ void AppState::render() {
                                         ImGui::PopID();
                                     }
                                     if (truncated) {
-                                        ImGui::SameLine();
                                         ImGui::TextColored(ImVec4(1, 0.5, 0, 1), "... +%zu more", totalCount - maxItems);
                                     }
                                 }

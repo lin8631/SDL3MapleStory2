@@ -350,6 +350,8 @@ void MapRenderer::loadBackTexture(SDL_Renderer* renderer, BackItem& back) {
             frameIdx = 0;
         }
         if (frameIdx >= 0 && frameIdx < static_cast<int>(frames.size())) {
+            // 保存目标帧指针
+            SDL_Texture* keep = frames[frameIdx];
             // 释放其他帧
             for (size_t i = 0; i < frames.size(); i++) {
                 if (static_cast<int>(i) != frameIdx) {
@@ -357,13 +359,17 @@ void MapRenderer::loadBackTexture(SDL_Renderer* renderer, BackItem& back) {
                 }
             }
             frames.clear();
-            frames.push_back(frames[frameIdx]);
+            frames.push_back(keep);
         } else {
+            // 索引无效，保留第一帧
+            SDL_Texture* keep = frames[0];
             for (auto tex : frames) {
-                SDL_DestroyTexture(tex);
+                if (tex != keep) {
+                    SDL_DestroyTexture(tex);
+                }
             }
             frames.clear();
-            frames.push_back(frames[0]);
+            frames.push_back(keep);
         }
     }
     

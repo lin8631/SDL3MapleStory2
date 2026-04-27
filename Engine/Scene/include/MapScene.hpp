@@ -119,7 +119,7 @@ struct BackItem : public ContainerNode::Slot {
     int x = 0, y = 0;
     int cx = 0, cy = 0;
     int rx = 0, ry = 0;
-    int type = 0;
+    int type = 0;        // 滚动模式 (0-7)
     int tileMode = 0;
     bool flipX = false;
     bool front = false;
@@ -129,6 +129,7 @@ struct BackItem : public ContainerNode::Slot {
     int time = 0;
     int screenMode = 0;
     int no = 0;
+    int ani = 0;        // 动画类型：0=back(静态), 1=ani(帧动画), 2=spine(骨骼)
     
     SDL_Texture* texture = nullptr;
     int texW = 0, texH = 0;
@@ -158,6 +159,7 @@ struct TileItem : public ContainerNode::Slot {
     int layer = 0;
     std::string tilesetName;
     std::string tileNo;
+    std::string uStr;     // 瓦片类型字符串（如"bsc", "edD", "enH"等），对应WZ中的U字段
     
     SDL_Texture* texture = nullptr;
     int texW = 0, texH = 0;

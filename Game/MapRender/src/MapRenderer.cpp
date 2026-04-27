@@ -198,7 +198,7 @@ void MapRenderer::loadTextures(SDL_Renderer* renderer) {
 }
 
 void MapRenderer::unloadTextures() {
-    // 使用三个独立的view分别处理，修复之前的view逻辑错误（同时拥有三个组件的实体不存在）
+    // 销毁纹理的实体也被销毁，防止重复加载时实体累积
     
     // BackComp
     for (auto e : registry_.view<BackComp>()) {
@@ -208,6 +208,7 @@ void MapRenderer::unloadTextures() {
             back.texture = nullptr;
         }
     }
+    registry_.clear<BackComp>();
     
     // TileComp
     for (auto e : registry_.view<TileComp>()) {
@@ -217,6 +218,7 @@ void MapRenderer::unloadTextures() {
             tile.texture = nullptr;
         }
     }
+    registry_.clear<TileComp>();
     
     // ObjComp
     for (auto e : registry_.view<ObjComp>()) {
@@ -226,6 +228,7 @@ void MapRenderer::unloadTextures() {
             obj.texture = nullptr;
         }
     }
+    registry_.clear<ObjComp>();
     
     registry_.clear<FootholdComp>();
     registry_.clear<PortalComp>();
@@ -255,9 +258,9 @@ void MapRenderer::loadBackTexture(SDL_Renderer* renderer, BackItem& back) {
     if (!extracted || !extracted->getNodes()) return;
     
     // 尝试多种动画类型目录：ani (帧动画), back (静态), spine (骨骼)
-    // 使用back.type作为动画类型索引
+    // 使用back.ani作为动画类型索引（区分于滚动模式type）
     std::string aniDir;
-    switch (back.type) {
+    switch (back.ani) {
         case 0: aniDir = "back"; break;
         case 1: aniDir = "ani"; break;
         case 2: aniDir = "spine"; break;
@@ -327,12 +330,14 @@ void MapRenderer::loadTileTexture(SDL_Renderer* renderer, TileItem& tile) {
     auto tilesetRoot = tilesetImg->getNode();
     if (!tilesetRoot || !tilesetRoot->getNodes()) return;
     
-    // 正确路径：Map\Tile\{TS}.img\{U}\{No}
-    // 先U（类型分类），再No（编号）
-    auto uFolderNode = tilesetRoot->getNodes()->operator[](std::to_string(tile.u));
-    if (!uFolderNode || !uFolderNode->getNodes()) return;
-    
-    auto tileEntryNode = uFolderNode->getNodes()->operator[](tile.tileNo);
+// 正确路径：Map\Tile\{TS}.img\{U}\{No}
+// 先U（类型分类字符串），再No（编号）
+// tile.uStr 是字符串类型（如"bsc", "edD", "enH"）
+std::string uKey = tile.uStr.empty() ? std::to_string(tile.u) : tile.uStr;
+auto uFolderNode = tilesetRoot->getNodes()->operator[](uKey);
+if (!uFolderNode || !uFolderNode->getNodes()) return;
+
+auto tileEntryNode = uFolderNode->getNodes()->operator[](tile.tileNo);
     if (!tileEntryNode) {
         tileEntryNode = uFolderNode->getNodes()->operator[]("0");
     }

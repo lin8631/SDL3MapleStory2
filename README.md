@@ -7,7 +7,8 @@
 git clone --recurse-submodules https://github.com/lin8631/SDL3MapleStory2.git --depth 1
 ```
 
-新建build目录.
+  mkdir -p build   创建build目录.
+  
 ```
   cmake -S . -B build -DWZLIB_USE_INTERNAL_AES=ON
   cmake --build build -j4
